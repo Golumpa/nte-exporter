@@ -1,0 +1,57 @@
+{
+  "pool_key": "permanent",
+  "game": "Neverness to Everness",
+  "system": {
+    "id": "monopoly",
+    "name": "Monopoly"
+  },
+  "banner": {
+    "id": "Lottery_Permanent",
+    "name": "Standard Board",
+    "shared_pity": false
+  },
+  "request": {
+    "family": "monopoly",
+    "length": 45,
+    "constant": 4220,
+    "constant_hex": "0x107c",
+    "selector": 4,
+    "cursor_offset": 31,
+    "cursor_step": 4,
+    "page_formula": "cursor / 4"
+  },
+  "response": {
+    "records_per_full_page": 5,
+    "marker_hex": "440000000c85c99141bdbdb17d3995dd49bdb19501"
+  },
+  "character_ids": [
+    "1003",
+    "1023",
+    "1025",
+    "1039",
+    "1054",
+    "1055",
+    "1008",
+    "1019",
+    "1020",
+    "1021",
+    "1033",
+    "1070"
+  ],
+  "ssr_character_ids": [
+    "1003",
+    "1023",
+    "1025",
+    "1039",
+    "1054",
+    "1055"
+  ],
+  "guarantee": {
+    "pool_guarantee_count": 90,
+    "pool_upgrade_count": 70,
+    "main_cost_item": {
+      "id": "DiceNormal",
+      "quantity": 1
+    }
+  }
+}

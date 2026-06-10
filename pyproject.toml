@@ -1,0 +1,13 @@
+[project]
+name = "nte-history-exporter"
+version = "0.1.0"
+description = "Prototype NTE Monopoly Permanent Board pull-history exporter."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+nte-history-exporter = "nte_history_exporter.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

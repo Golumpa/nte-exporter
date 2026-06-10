@@ -1,0 +1,31 @@
+{
+  "pool_key": "limited_character",
+  "game": "Neverness to Everness",
+  "system": {
+    "id": "monopoly",
+    "name": "Monopoly"
+  },
+  "banner": {
+    "id": "Lottery_LimitedCharacter",
+    "name": "Limited Character Board",
+    "shared_pity": true
+  },
+  "request": {
+    "family": "monopoly",
+    "length": 45,
+    "constant": 4220,
+    "constant_hex": "0x107c",
+    "selector": 8,
+    "cursor_offset": 31,
+    "cursor_step": 4,
+    "page_formula": "cursor / 4"
+  },
+  "response": {
+    "records_per_full_page": 5,
+    "marker_hex": "4c0000000c85c99141bdbdb17d0da185c9858dd195c901"
+  },
+  "notes": [
+    "Limited character boards are exported under one shared pool group.",
+    "Do not split by individual limited banners such as Nanali, Xun, or AnHunQu."
+  ]
+}

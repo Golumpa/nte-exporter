@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.venv/
+venv/
+env/
+
+dist/
+build/
+*.egg-info/
+
+# Captures, generated exports, and reference research outputs.
+exports/*
+!exports/.gitkeep
+briefs/
+*.flows
+*.pcap
+*.pcapng
+*.cap
+
+# Local/editor noise.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

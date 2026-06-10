@@ -1,0 +1,32 @@
+{
+  "pool_key": "arc_miracle_box",
+  "game": "Neverness to Everness",
+  "system": {
+    "id": "gashapon",
+    "name": "Gashapon"
+  },
+  "banner": {
+    "id": "Arc_MiracleBox",
+    "name": "Arc Miracle Box",
+    "shared_pity": true
+  },
+  "request": {
+    "family": "arc",
+    "length": 34,
+    "constant": 2060,
+    "constant_hex": "0x080c",
+    "selector": null,
+    "cursor_offset": 29,
+    "cursor_step": 2,
+    "page_formula": "cursor / 2"
+  },
+  "response": {
+    "records_per_full_page": 5,
+    "timestamp_group_size": 10,
+    "first_record_offset_hex": "0x4c"
+  },
+  "notes": [
+    "Arc history is separate from Monopoly history.",
+    "Arc timestamp groups are expected to be complete 10-pull groups."
+  ]
+}
