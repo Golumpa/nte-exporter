@@ -22,7 +22,15 @@ Decoded fields:
   - `source_flag = -4` means Chase Reward
 - Timestamp is an 8-byte little-endian value
 - `unix_seconds = little_endian_u64(timestamp_raw) / 40000000 - 62135596800`
-- Rewards are identified by stable binary keys
+- Reward keys are the reward id string encoded one character per byte as
+  `ASCII * 4` with carry chaining into the next byte. The final byte is the
+  pending carry (`00` or `01`) acting as a terminator, or is omitted.
+  Examples: `98bdc9ad7dd9a5b99501` decodes to `fork_vine`,
+  `10a58d9539bdc9b585b101` to `DiceNormal`, `c4c0cccc00` to character id `1033`.
+  Arc/Gashapon history uses the same scheme at `ASCII * 2`.
+- The decoder decodes the key to its id string and looks up display metadata
+  in `mappings/arcs.json`, `mappings/characters.json`, and `mappings/items.json`.
+  Unknown rewards still export their decoded id with empty name/rank.
 
 Page and row numbers are research metadata only. They must not be used for permanent dedupe because they shift when new history appears.
 

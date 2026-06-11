@@ -15,7 +15,52 @@ from nte_history_exporter.constants import (
     TIMESTAMP_TICKS_PER_SECOND,
     VALID_DICE_FIELDS,
 )
-from nte_history_exporter.mappings import KNOWN_REWARDS
+from nte_history_exporter.mappings import REWARDS_BY_ID
+
+REWARD_ID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+
+
+def decode_reward_key(raw: bytes) -> str:
+    """Decode a Monopoly reward key into its reward id string.
+
+    Keys encode the id one character per byte as ASCII*4 with carry chaining
+    (Arc history uses the same scheme at ASCII*2). The final byte is either the
+    pending carry (0 or 1) acting as a terminator, or a regular character byte.
+    The carry bit makes some bytes ambiguous, so decode with backtracking and
+    accept only parses made of identifier characters.
+    """
+    results: list[str] = []
+
+    def walk(index: int, carry: int, acc: str) -> None:
+        if results:
+            return
+        if index == len(raw):
+            if carry == 0:
+                results.append(acc)
+            return
+        byte = raw[index]
+        if index == len(raw) - 1 and byte == carry:
+            results.append(acc)
+            return
+        for carry_out in (0, 1):
+            value = byte - carry + 256 * carry_out
+            if value % 4 == 0 and chr(value // 4) in REWARD_ID_CHARS:
+                walk(index + 1, carry_out, acc + chr(value // 4))
+
+    walk(0, 0, "")
+    return results[0] if results else ""
+
+
+def infer_reward_type(reward_id: str) -> str:
+    if not reward_id:
+        return ""
+    if reward_id.startswith("fork_"):
+        return "arc"
+    if reward_id.isdigit():
+        return "character"
+    if reward_id.startswith("Fashion_"):
+        return "cosmetic"
+    return "item"
 
 
 def decode_history_timestamp(raw8: bytes) -> tuple[int, float, str]:
@@ -98,20 +143,20 @@ def classify_result_type(
     return "dice", None
 
 
-def guess_quantity(chunk_hex: str, key_hex: str, result_type: str | None = None) -> int | None:
-    if key_hex == "10a58d957dd1a58dad95d17dc1c400":
+def guess_quantity(chunk_hex: str, reward_id: str, result_type: str | None = None) -> int | None:
+    if reward_id == "Dice_ticket_01":
         if result_type == "chase_reward":
             return 30
         return 4
-    if key_hex == "10a58d9539bdc9b585b101":
+    if reward_id == "DiceNormal":
         return 1
-    if key_hex == "10a58d957dd1a58dad95d17dc1c800":
+    if reward_id == "Dice_ticket_02":
         if "c8b0d4c0" in chunk_hex:
             return 50
         if "c8b0ccc0" in chunk_hex:
             return 30
         return None
-    if key_hex:
+    if reward_id:
         return 1
     return None
 
@@ -142,7 +187,8 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
             dice = -4
             dice_raw = -4
         key_hex = extract_key(chunk)
-        reward = KNOWN_REWARDS.get(key_hex, {})
+        reward_id = decode_reward_key(bytes.fromhex(key_hex)) if key_hex else ""
+        reward = REWARDS_BY_ID.get(reward_id, {})
         timestamp_raw = response_content[marker_offset + len(marker) : marker_offset + len(marker) + 8]
         timestamp_ticks, timestamp_unix, timestamp_decoded = decode_history_timestamp(timestamp_raw)
         chunk_hex = chunk.hex()
@@ -163,11 +209,11 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
                 "dice_raw_u32": dice_raw,
                 "dice_offset_in_record": dice_offset,
                 "reward_key_hex": key_hex,
-                "reward_type": reward.get("type", ""),
-                "reward_id": reward.get("id", ""),
+                "reward_type": reward.get("type") or infer_reward_type(reward_id),
+                "reward_id": reward_id,
                 "reward_name": reward.get("name", ""),
                 "reward_rank": reward.get("rank"),
-                "quantity": guess_quantity(chunk_hex, key_hex, result_type),
+                "quantity": guess_quantity(chunk_hex, reward_id, result_type),
                 "timestamp_raw_hex": timestamp_raw.hex(),
                 "timestamp_ticks": timestamp_ticks,
                 "timestamp_unix": f"{timestamp_unix:.6f}",

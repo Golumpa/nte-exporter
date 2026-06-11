@@ -17,7 +17,8 @@ from nte_history_exporter.constants import LIMITED_CHARACTER_MARKER, MARKER
 from nte_history_exporter.decoder.boundary import page_gap_warnings
 from nte_history_exporter.decoder.protocol import decode_response_records, history_request_kind
 from nte_history_exporter.constants import POOL_META
-from nte_history_exporter.mappings import ARC_META, CHARACTERS
+from nte_history_exporter.mappings import ARC_META, CHARACTERS, ITEMS, REWARDS_BY_ID
+from nte_history_exporter.decoder.protocol import decode_reward_key, infer_reward_type
 from nte_history_exporter.decoder.arc import (
     build_arc_rows_from_pairs,
     decode_arc_key,
@@ -32,6 +33,8 @@ from nte_history_exporter.pool_mappings import load_pool_mappings, pool_meta_fro
 
 def load_reference_csv(name):
     path = EXPORTS / name
+    if not path.exists():
+        path = EXPORTS / "old" / name
     if not path.exists():
         raise unittest.SkipTest(f"private reference fixture not present: {path}")
     rows = []
@@ -88,14 +91,61 @@ class BoundaryExportTests(unittest.TestCase):
             with self.subTest(pool_key=pool_key):
                 self.assertEqual(pool_meta_from_mapping(mapping), POOL_META[pool_key])
 
-    def test_reward_mapping_json_matches_runtime_mappings(self):
-        with (ROOT / "mappings" / "arcs.json").open(encoding="utf-8") as f:
-            arc_json = json.load(f)
-        with (ROOT / "mappings" / "characters.json").open(encoding="utf-8") as f:
-            character_json = json.load(f)
+    def test_reward_mapping_files_have_expected_shape(self):
+        self.assertTrue(ARC_META)
+        for arc_id, meta in ARC_META.items():
+            with self.subTest(arc_id=arc_id):
+                self.assertTrue(arc_id.startswith("fork_"))
+                self.assertIn("name", meta)
+                self.assertIn(meta.get("rank"), ("S", "A", "B"))
 
-        self.assertEqual(arc_json, ARC_META)
-        self.assertEqual(character_json, CHARACTERS)
+        self.assertTrue(CHARACTERS)
+        for character_id, info in CHARACTERS.items():
+            with self.subTest(character_id=character_id):
+                self.assertTrue(character_id.isdigit())
+                self.assertIn("name", info)
+                self.assertIn(info.get("rank"), ("S", "A"))
+
+        self.assertTrue(ITEMS)
+        for item_id, info in ITEMS.items():
+            with self.subTest(item_id=item_id):
+                self.assertIn(info.get("type"), ("item", "cosmetic"))
+                self.assertIn("name", info)
+
+    def test_rewards_by_id_merges_all_mapping_files(self):
+        for reward_id in (*ARC_META, *CHARACTERS, *ITEMS):
+            with self.subTest(reward_id=reward_id):
+                reward = REWARDS_BY_ID[reward_id]
+                self.assertEqual(reward["id"], reward_id)
+                self.assertIn(reward["type"], ("arc", "character", "item", "cosmetic"))
+
+    def test_decode_reward_key_round_trips_observed_keys(self):
+        observed = {
+            "98bdc9ad7dd9a5b99501": "fork_vine",
+            "98bdc9ad7d41c9bdad85c9e5bdb901": "fork_Prokaryon",
+            "98bdc9ad7ddda1d585add585b99d01": "fork_whuakuang",
+            "98bdc9ad7dddd5a1d585add585b99d01": "fork_wuhuakuang",
+            "10a58d9539bdc9b585b101": "DiceNormal",
+            "10a58d957dd1a58dad95d17dc1c400": "Dice_ticket_01",
+            "10a58d957dd1a58dad95d17dc1c800": "Dice_ticket_02",
+            "10a58d95b1a5b5a5d19501": "Dicelimite",
+            "1885cda1a5bdb97d1db1a591957dc5c0c4c000": "Fashion_Glide_1010",
+            "1885cda1a5bdb97dd995a1a58db1957dc5c0c4c07c59c1c0e000": "Fashion_vehicle_1010_V008",
+            "c4c0cccc00": "1033",
+            "c4c0dcc000": "1070",
+            "c4c0dcc0": "1070",
+            "c4c0c8c4": "1021",
+        }
+        for key_hex, expected_id in observed.items():
+            with self.subTest(key_hex=key_hex):
+                self.assertEqual(decode_reward_key(bytes.fromhex(key_hex)), expected_id)
+
+    def test_infer_reward_type_for_unmapped_ids(self):
+        self.assertEqual(infer_reward_type("fork_newarc"), "arc")
+        self.assertEqual(infer_reward_type("1099"), "character")
+        self.assertEqual(infer_reward_type("Fashion_hat_2000"), "cosmetic")
+        self.assertEqual(infer_reward_type("Dice_ticket_03"), "item")
+        self.assertEqual(infer_reward_type(""), "")
 
     def test_uid_source_matches_v4_reference(self):
         rows = load_reference_csv("monopoly_history_poc_10_all_44_pages_v4.csv")
@@ -133,6 +183,8 @@ class BoundaryExportTests(unittest.TestCase):
         exported = [row for row in annotated if row["export_record"] is True]
 
         json_path = EXPORTS / "monopoly_history_export_10_all_44_pages_v4.json"
+        if not json_path.exists():
+            json_path = EXPORTS / "old" / "monopoly_history_export_10_all_44_pages_v4.json"
         if not json_path.exists():
             raise unittest.SkipTest(f"private reference fixture not present: {json_path}")
         with json_path.open(encoding="utf-8") as f:

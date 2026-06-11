@@ -12,6 +12,6 @@ Known limitations:
 - Live capture currently uses Windows raw sockets and requires administrator permission.
 - The file adapter reads mitmproxy `.flows` captures for research and testing.
 - The more stable and reliable Npcap/libpcap capture is not implemented yet.
-- Reward mappings are research mappings and should be expanded as more samples are decoded.
+- Reward keys decode to their reward id string, so unknown rewards still export a usable `reward_id`; display names/ranks come from the mapping JSON files and should be expanded as new rewards appear.
 
 Privacy guardrail: raw packet data must not be included in sanitized exports.

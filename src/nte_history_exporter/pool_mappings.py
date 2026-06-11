@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MAPPINGS_DIR = PROJECT_ROOT / "mappings"
+from nte_history_exporter.mappings import load_mapping_file
 
 POOL_MAPPING_FILES = {
     "permanent": "permanent_board.json",
@@ -15,8 +12,7 @@ POOL_MAPPING_FILES = {
 
 
 def load_pool_mapping(pool_key: str) -> dict[str, Any]:
-    filename = POOL_MAPPING_FILES[pool_key]
-    return json.loads((MAPPINGS_DIR / filename).read_text(encoding="utf-8"))
+    return load_mapping_file(POOL_MAPPING_FILES[pool_key])
 
 
 def load_pool_mappings() -> dict[str, dict[str, Any]]:

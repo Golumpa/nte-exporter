@@ -1,0 +1,8 @@
+{
+  "DiceNormal": {"type": "item", "name": "Fabricated Dice", "rank": null},
+  "Dice_ticket_01": {"type": "item", "name": "Warp Piece", "rank": null},
+  "Dice_ticket_02": {"type": "item", "name": "Lost Piece", "rank": null},
+  "Dicelimite": {"type": "item", "name": "Solid Dice", "rank": null},
+  "Fashion_vehicle_1010_V008": {"type": "cosmetic", "name": "Fashion Vehicle Skin 1010 V008", "rank": null},
+  "Fashion_Glide_1010": {"type": "cosmetic", "name": "Fashion Glider 1010", "rank": null}
+}
