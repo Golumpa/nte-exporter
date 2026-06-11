@@ -73,6 +73,8 @@ function Get-PythonCommand {
 }
 
 $pythonCommand = @(Get-PythonCommand)
+# The elevated relaunch starts in System32; exports/ is relative, so run from the repo root.
+Set-Location $PSScriptRoot
 $env:PYTHONPATH = Join-Path $PSScriptRoot 'src'
 
 $pythonExe = $pythonCommand[0]
