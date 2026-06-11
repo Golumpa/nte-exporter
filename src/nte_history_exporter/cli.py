@@ -5,7 +5,6 @@ import json
 
 from nte_history_exporter import console
 from nte_history_exporter.adapters.mitmproxy_flows import decode_mitmproxy_flows
-from nte_history_exporter.decoder.arc import arc_stability_warnings
 from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
@@ -39,13 +38,13 @@ def main(argv: list[str] | None = None) -> int:
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)
     if decoded["arc_rows"] and not decoded["rows"]:
         rows = decoded["arc_rows"]
-        warnings = decoded["arc_warnings"] + arc_stability_warnings(rows)
+        warnings = decoded["arc_warnings"]
         kind = "arc_miracle_box"
         best_run = decoded["best_arc_run"]
         pair_count = len(decoded["arc_pairs"])
     else:
-        rows, group_warnings = annotate_groups(decoded["rows"])
-        warnings = decoded["run_warnings"] + group_warnings
+        rows = annotate_groups(decoded["rows"])
+        warnings = decoded["run_warnings"]
         kind = decoded["best_run"][0][7] if decoded["best_run"] and len(decoded["best_run"][0]) > 7 else "permanent"
         best_run = decoded["best_run"]
         pair_count = len(decoded["pairs"])
@@ -72,7 +71,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     for warning in warnings:
         console.print_warning(warning["code"], warning["reason"], warning.get("records"))
-    console.maybe_print_incomplete_hint(warnings)
     print()
     if args.debug:
         console.print_note(f"CSV written: {out_path}")

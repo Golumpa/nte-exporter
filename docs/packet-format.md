@@ -36,7 +36,7 @@ Page and row numbers are research metadata only. They must not be used for perma
 
 Timestamp groups keep all records with the same raw timestamp together for UID ordinal generation. For boundary/group-size detection, only `result_type = dice` rows count as pull-set members; Points Gift and Chase Reward rows stay in the group but do not increase the dice-only group count.
 
-Pages are anchored to the continuous run starting at page 1 (history always loads page 1 first), so the newest timestamp group's ordinal 0 is always captured. Ordinals are assigned in scan order (newest first), so ordinal 0 of a timestamp group is its newest record and any unseen continuation rows can only append after the captured ones with higher ordinals. Every exported UID is therefore stable. The oldest captured group is the only nuance: if the capture did not reach the true end of history (final page full) and the dice-only count is not a positive multiple of 10, it may be an unfinished 10-pull continuing onto an uncaptured page; its captured prefix is still ordinal-stable, so it is exported and flagged `INCOMPLETE_TIMESTAMP_GROUP_EXPORTED` so the user knows to scroll further. If page 1 itself was not captured, the run falls back to the longest continuous block and emits `DID_NOT_START_AT_PAGE_1`.
+Pages are anchored to the continuous run starting at page 1 (history always loads page 1 first), so the newest timestamp group's ordinal 0 is always captured. Ordinals are assigned in scan order (newest first), so ordinal 0 of a timestamp group is its newest record and any unseen continuation rows can only append after the captured ones with higher ordinals. Every exported UID is therefore stable, including a partially captured oldest 10-pull, so all decoded rows are exported. If page 1 itself was not captured, the run falls back to the longest continuous block and emits `DID_NOT_START_AT_PAGE_1`.
 
 ## Arc / Gashapon
 
@@ -46,5 +46,5 @@ Pages are anchored to the continuous run starting at page 1 (history always load
 - Pool: `Arc_MiracleBox`.
 - Each response page normally contains 5 records.
 - Arc timestamps use `unix_seconds = little_endian_u64(timestamp_raw) / 20000000 - 62135596800`.
-- Arc pulls are treated as 10-pull timestamp groups. Like Monopoly, the oldest captured group is exported even if it is a 10-pull the scan stopped mid-way (its captured prefix is ordinal-stable) and flagged `INCOMPLETE_ARC_10_PULL_EXPORTED`.
+- Arc pulls are treated as 10-pull timestamp groups. Like Monopoly, every captured group is exported, including the oldest one even if the scan stopped mid-10-pull (its captured prefix is ordinal-stable).
 - Arc rows use the same `reward_type`, `reward_id`, `reward_name`, `reward_rank`, and `reward_key_hex` fields as Monopoly rows.

@@ -119,37 +119,3 @@ def print_success(text: str) -> None:
 
 def print_problem(text: str) -> None:
     print(style(f"  {text}", YELLOW, BOLD))
-
-
-def print_boxed(lines: list[str], *codes: str) -> None:
-    inner = WIDTH - 4
-    border = "  +" + "-" * (WIDTH - 2) + "+"
-    print(style(border, *codes))
-    for line in lines:
-        print(style("  | " + line.ljust(inner) + " |", *codes))
-    print(style(border, *codes))
-
-
-# Warning codes for an oldest timestamp group that was exported despite possibly
-# being an unfinished 10-pull. The exported rows are stable, so the warning is
-# informational and the user can ignore it once the rest is captured.
-INCOMPLETE_EXPORT_CODES = {
-    "INCOMPLETE_TIMESTAMP_GROUP_EXPORTED",
-    "INCOMPLETE_ARC_10_PULL_EXPORTED",
-}
-
-
-def maybe_print_incomplete_hint(warnings: list[dict]) -> None:
-    if not any(w.get("code") in INCOMPLETE_EXPORT_CODES for w in warnings):
-        return
-    print()
-    print_boxed(
-        [
-            "The INCOMPLETE_..._EXPORTED warning above is safe",
-            "to ignore if the partial 10-pull it captured is",
-            "already in your tracker. Otherwise restart",
-            "the capture and go to a further page",
-        ],
-        GREEN,
-        BOLD,
-    )

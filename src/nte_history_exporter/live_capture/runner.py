@@ -9,7 +9,6 @@ from pathlib import Path
 
 from nte_history_exporter import console
 from nte_history_exporter.constants import POOL_META
-from nte_history_exporter.decoder.arc import arc_stability_warnings
 from nte_history_exporter.decoder.boundary import annotate_groups, select_continuous_run_from_page_1
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
@@ -88,11 +87,9 @@ def run_live_capture(
         pairs = session.pairs_for_kind(kind)
         best_run, run_warnings = select_continuous_run_from_page_1(pairs)
         rows = session.build_rows(kind)
-        if kind == "arc_miracle_box":
-            warnings = run_warnings + arc_stability_warnings(rows)
-        else:
-            rows, group_warnings = annotate_groups(rows)
-            warnings = run_warnings + group_warnings
+        if kind != "arc_miracle_box":
+            rows = annotate_groups(rows)
+        warnings = run_warnings
         pages_seen = [p[0] for p in best_run]
         csv_path, json_path = export_paths(kind)
         if write_debug_csv:
@@ -123,7 +120,6 @@ def run_live_capture(
         console.print_note("again, then reopen the history screen.")
         return {"exports": []}
 
-    all_warnings = []
     for item in exports:
         scan = item["export"]["scan"]
         console.print_export_summary(
@@ -134,8 +130,6 @@ def run_live_capture(
         )
         for warning in scan["warnings"]:
             console.print_warning(warning["code"], warning["reason"], warning.get("records"))
-        all_warnings.extend(scan["warnings"])
-    console.maybe_print_incomplete_hint(all_warnings)
 
     print()
     for item in exports:

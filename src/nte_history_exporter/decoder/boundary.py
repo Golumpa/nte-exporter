@@ -100,23 +100,17 @@ def is_dice_record(row: dict[str, Any]) -> bool:
         return False
 
 
-def annotate_groups(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def annotate_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Assign timestamp-group ordinals and stable UIDs to every decoded row.
 
     Pages are anchored at page 1 (see select_continuous_run_from_page_1), so the
-    newest group's ordinal 0 is always captured and every UID is stable. The only
-    nuance is the oldest group: if the capture did not reach the true end of
-    history (final page full) and the dice-only count is not a complete multiple
-    of 10, it may be an unfinished 10-pull continuing onto an uncaptured page. Its
-    captured prefix is still ordinal-stable, so it is exported with an
-    informational warning rather than withheld.
+    newest group's ordinal 0 is always captured. Within a group, ordinal 0 is the
+    newest record and unseen continuation rows can only append after the captured
+    ones, so every exported UID is stable -- even a partially captured oldest
+    group. All decoded rows are therefore exported.
     """
     if not rows:
-        return rows, []
-
-    last_page = max(int(r["page"]) for r in rows if str(r.get("page", "")).isdigit())
-    last_page_records = [r for r in rows if r.get("page") == last_page]
-    final_page_is_partial = len(last_page_records) < 5
+        return rows
 
     groups: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
@@ -132,39 +126,18 @@ def annotate_groups(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], l
     if current:
         groups.append(current)
 
-    warnings: list[dict[str, Any]] = []
     for group_index, group in enumerate(groups):
-        at_oldest_boundary = group_index == len(groups) - 1
         dice_record_count = sum(1 for row in group if is_dice_record(row))
-        dice_complete = dice_record_count > 0 and dice_record_count % 10 == 0
-        incomplete = at_oldest_boundary and not final_page_is_partial and not dice_complete
-        skip_reason = (
-            "oldest timestamp group may continue onto the next uncaptured page; "
-            "exported rows are stable, scroll further to capture the rest"
-            if incomplete
-            else ""
-        )
-
-        if incomplete:
-            warnings.append(
-                {
-                    "code": "INCOMPLETE_TIMESTAMP_GROUP_EXPORTED",
-                    "timestamp_raw": group[0].get("timestamp_raw_hex", ""),
-                    "timestamp_decoded": group[0].get("timestamp_decoded", ""),
-                    "records": len(group),
-                    "dice_records": dice_record_count,
-                    "reason": skip_reason,
-                }
-            )
-
         for ordinal, row in enumerate(group):
             row["timestamp_group_index"] = group_index
             row["timestamp_group_ordinal"] = ordinal
             row["timestamp_group_size_seen"] = dice_record_count
             row["timestamp_group_record_size_seen"] = len(group)
-            row["timestamp_group_boundary"] = "oldest" if at_oldest_boundary else ("newest" if group_index == 0 else "")
-            row["uid_status"] = "incomplete_stable" if incomplete else "stable"
+            row["timestamp_group_boundary"] = (
+                "oldest" if group_index == len(groups) - 1 else ("newest" if group_index == 0 else "")
+            )
+            row["uid_status"] = "stable"
             row["uid"] = make_uid(row, ordinal)
             row["export_record"] = True
-            row["skip_reason"] = skip_reason
-    return rows, warnings
+            row["skip_reason"] = ""
+    return rows

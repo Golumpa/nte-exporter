@@ -57,9 +57,9 @@ NTE history records do not appear to contain a unique server-side roll ID. UIDs 
 
 History always loads page 1 first and is scrolled downward, so the exporter anchors to the continuous run of pages starting at page 1 and ignores anything after the first gap (with a warning). This keeps the newest pages even if a later page is lost, and guarantees the newest timestamp group's ordinal 0 is captured.
 
-Within a timestamp group, ordinal 0 is the newest record and unseen rows can only append after the captured ones, so every exported UID is stable. The one nuance is the oldest captured group: if the capture did not reach the true end of history and its dice-roll count is not a complete multiple of 10, it may be an unfinished 10-pull continuing onto an uncaptured page. Its captured prefix is still ordinal-stable, so it is exported with an informational warning telling you to scroll further to capture the rest.
+Within a timestamp group, ordinal 0 is the newest record and unseen rows can only append after the captured ones, so every exported UID is stable -- including a partially captured oldest 10-pull. All decoded rows are therefore exported. Re-scanning later simply adds any rows that were not yet captured, with the same UIDs for the rows already seen.
 
-For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls, so the same rule applies with a fixed group size of 10. In both systems the oldest captured group is exported even if it is an unfinished pull set (its captured prefix is ordinal-stable), and flagged with a warning so you know to scroll further on a later scan.
+For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls. In both systems every captured group is exported, including the oldest one even if it is a partially captured pull set, because its captured prefix is ordinal-stable.
 
 ## Current Adapters
 

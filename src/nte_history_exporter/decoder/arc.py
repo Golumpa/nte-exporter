@@ -141,59 +141,23 @@ def make_arc_uid(timestamp_raw: str, ordinal: int, arc_key_hex: str) -> str:
 
 
 def annotate_arc_groups(rows: list[dict[str, Any]]) -> None:
+    # Pages are anchored at page 1, so ordinal 0 of every group is captured and
+    # all UIDs are stable -- even a partially captured oldest 10-pull, whose
+    # unseen rows can only append after the captured ones. All rows are exported.
     groups: dict[str, list[int]] = defaultdict(list)
     for index, row in enumerate(rows):
         groups[row["timestamp_raw_hex"]].append(index)
 
-    group_items = list(groups.items())
-    for group_index, (timestamp_raw, indexes) in enumerate(group_items):
-        at_oldest_boundary = group_index == len(group_items) - 1
-        # Arc pulls are always 10-pulls, so the only group that can be short is
-        # the oldest one, where the scan stopped mid-10-pull. Its captured prefix
-        # is ordinal-stable (ordinal 0 is captured, unseen rows append after it),
-        # so export it and flag it rather than dropping it.
-        incomplete = at_oldest_boundary and len(indexes) % 10 != 0
-        skip_reason = (
-            "arc timestamp group is not a complete 10-pull in this capture; "
-            "exported rows are stable, scroll further to capture the rest"
-            if incomplete
-            else ""
-        )
+    for group_index, (timestamp_raw, indexes) in enumerate(groups.items()):
         for ordinal, index in enumerate(indexes):
             row = rows[index]
             row["timestamp_group_index"] = group_index
             row["timestamp_group_ordinal"] = ordinal
             row["timestamp_group_size_seen"] = len(indexes)
             row["uid"] = make_arc_uid(timestamp_raw, ordinal, row["reward_key_hex"])
-            row["uid_status"] = "incomplete_stable" if incomplete else "stable"
+            row["uid_status"] = "stable"
             row["export_record"] = True
-            row["skip_reason"] = skip_reason
-
-
-def arc_stability_warnings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    warnings = []
-    seen = set()
-    for row in rows:
-        if row.get("uid_status") != "incomplete_stable":
-            continue
-        timestamp_raw = row["timestamp_raw_hex"]
-        if timestamp_raw in seen:
-            continue
-        seen.add(timestamp_raw)
-        group = [r for r in rows if r["timestamp_raw_hex"] == timestamp_raw]
-        warnings.append(
-            {
-                "code": "INCOMPLETE_ARC_10_PULL_EXPORTED",
-                "timestamp_raw": timestamp_raw,
-                "timestamp_decoded": row["timestamp_decoded"],
-                "records": len(group),
-                "reason": (
-                    "arc timestamp group is not a complete 10-pull in this capture; "
-                    "exported rows are stable, scroll further to capture the rest"
-                ),
-            }
-        )
-    return warnings
+            row["skip_reason"] = ""
 
 
 def select_continuous_arc_run(pairs: list[tuple]) -> tuple[list[tuple], list[dict[str, Any]]]:
