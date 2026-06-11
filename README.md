@@ -32,7 +32,9 @@ Live capture, Windows:
 .\run-exporter.ps1 --live
 ```
 
-Launch it before logging in, then open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as `Permanent_<date_time>.csv/json`, `Limited_<date_time>.csv/json`, or `Arc_<date_time>.csv/json`.
+Launch it before logging in, then open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as `Permanent_<date_time>.json`, `Limited_<date_time>.json`, or `Arc_<date_time>.json`.
+
+Pass `--debug` to also write the full research CSV next to each JSON export.
 
 If only one banner is captured, the export JSON is copied to the clipboard. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
 

@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flow-index", type=int, default=None)
     parser.add_argument("--interface-ip", default=None, help="local IPv4 address to bind for live capture")
     parser.add_argument("--no-clipboard", action="store_true", help="do not copy live exports to clipboard")
+    parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
     parser.add_argument(
         "--allow-boundary-records",
         action="store_true",
@@ -34,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_live_capture(
             interface_ip=args.interface_ip,
             copy_clipboard=not args.no_clipboard,
+            write_debug_csv=args.debug,
         )
         for item in result["exports"]:
             export = item["export"]
@@ -69,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         pair_count = len(decoded["pairs"])
 
     out_path, json_path = export_paths(kind)
-    write_csv(out_path, rows)
+    if args.debug:
+        write_csv(out_path, rows)
     export = build_export_json(
         rows,
         warnings,
@@ -80,7 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     json_path.write_text(json.dumps(export, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"CSV written: {out_path}")
+    if args.debug:
+        print(f"CSV written: {out_path}")
     print(f"JSON written: {json_path}")
     print(
         "Decoded {decoded}, exported {exported}, skipped {skipped}.".format(

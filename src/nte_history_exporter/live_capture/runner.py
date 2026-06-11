@@ -46,6 +46,7 @@ def run_live_capture(
     *,
     interface_ip: str | None = None,
     copy_clipboard: bool = True,
+    write_debug_csv: bool = False,
 ) -> dict:
     local_ip = interface_ip or detect_local_ipv4()
     session = LiveHistorySession(local_ip)
@@ -95,7 +96,8 @@ def run_live_capture(
             warnings = page_gap_warnings(pairs, best_run) + warnings
         pages_seen = [p[0] for p in best_run]
         csv_path, json_path = export_paths(kind)
-        write_csv(csv_path, rows)
+        if write_debug_csv:
+            write_csv(csv_path, rows)
         export = build_export_json(
             rows,
             warnings,
@@ -104,7 +106,15 @@ def run_live_capture(
         )
         payload = json.dumps(export, ensure_ascii=False, indent=2)
         json_path.write_text(payload, encoding="utf-8")
-        exports.append({"kind": kind, "csv_path": csv_path, "json_path": json_path, "export": export, "payload": payload})
+        exports.append(
+            {
+                "kind": kind,
+                "csv_path": csv_path if write_debug_csv else None,
+                "json_path": json_path,
+                "export": export,
+                "payload": payload,
+            }
+        )
 
     if not exports:
         print("No Monopoly history pages were captured.")
@@ -118,7 +128,8 @@ def run_live_capture(
         print("Multiple banners captured; clipboard copy skipped.")
 
     for item in exports:
-        print(f"CSV written: {item['csv_path']}")
+        if item["csv_path"] is not None:
+            print(f"CSV written: {item['csv_path']}")
         print(f"Export written: {item['json_path']}")
     return {"exports": exports}
 
