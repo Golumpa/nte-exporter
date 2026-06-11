@@ -36,6 +36,8 @@ Page and row numbers are research metadata only. They must not be used for perma
 
 Timestamp groups keep all records with the same raw timestamp together for UID ordinal generation. For boundary/group-size detection, only `result_type = dice` rows count as pull-set members; Points Gift and Chase Reward rows stay in the group but do not increase the dice-only group count.
 
+Oldest-boundary groups are exported when their dice-only count is a positive multiple of 10: the pull set is provably finished, and any unseen same-timestamp continuation rows can only be non-dice tails that sort after the seen rows, so exported ordinals and UIDs stay stable. Oldest groups with other dice counts are still dropped unless the capture reached the true end of history. Newest-boundary groups remain positional-only: when a scan starts mid-history, unseen newer rows would shift ordinals, so dice count is never accepted as proof there.
+
 ## Arc / Gashapon
 
 - Arc history uses a separate 34-byte request.

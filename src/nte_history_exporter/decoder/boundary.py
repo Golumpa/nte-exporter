@@ -114,13 +114,17 @@ def annotate_groups(
         at_oldest_boundary = group_index == len(groups) - 1
         dice_records_in_group = [row for row in group if is_dice_record(row)]
         dice_record_count = len(dice_records_in_group)
+        # A complete multiple of 10 dice rolls proves the pull set is finished.
+        # Unseen continuation rows can only be non-dice tails that sort after the
+        # seen rows, so exported ordinals (and UIDs) stay stable.
+        dice_complete = dice_record_count > 0 and dice_record_count % 10 == 0
         group_status = "stable"
         skip_reason = ""
 
         if at_newest_boundary and not starts_from_page_1:
             group_status = "dropped_boundary_group"
             skip_reason = "newest timestamp group may be partial because scan did not start from page 1"
-        elif at_oldest_boundary and not final_page_is_partial:
+        elif at_oldest_boundary and not final_page_is_partial and not dice_complete:
             group_status = "dropped_boundary_group"
             skip_reason = "oldest timestamp group may continue onto the next uncaptured page"
 

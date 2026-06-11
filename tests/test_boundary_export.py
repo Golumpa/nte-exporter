@@ -162,19 +162,70 @@ class BoundaryExportTests(unittest.TestCase):
         }
         self.assertNotEqual(make_uid(row, 0), "5adcf52282e15445466863b271f3b745")
 
-    def test_pages_1_to_5_drops_oldest_boundary_group(self):
+    def test_pages_1_to_5_exports_dice_complete_oldest_group(self):
         rows = load_reference_csv("monopoly_history_poc_13_pages_1_to_5_v4.csv")
         annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
 
         exported = [row for row in annotated if row["export_record"] is True]
         skipped = [row for row in annotated if row["export_record"] is False]
 
+        # The oldest group has exactly 10 dice rolls (plus a Points Gift), which
+        # proves the pull set is complete even though the scan stopped on a full page.
         self.assertEqual(len(annotated), 25)
-        self.assertEqual(len(exported), 14)
-        self.assertEqual(len(skipped), 11)
+        self.assertEqual(len(exported), 25)
+        self.assertEqual(len(skipped), 0)
+        self.assertEqual(len(warnings), 0)
+
+    @staticmethod
+    def _synthetic_row(page, timestamp_hex, result_type):
+        return {
+            "page": page,
+            "timestamp_raw_hex": timestamp_hex,
+            "timestamp_decoded": f"ts-{timestamp_hex}",
+            "result_type": result_type,
+            "dice": 4 if result_type == "dice" else 0,
+            "reward_key_hex": "10a58d9539bdc9b585b101",
+            "quantity": 1,
+        }
+
+    def test_oldest_group_with_partial_dice_count_still_drops(self):
+        rows = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(2, "bb", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(3, "bb", "dice") for _ in range(4)]
+        rows += [self._synthetic_row(3, "bb", "points_gift")]
+
+        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        exported = [row for row in annotated if row["export_record"] is True]
+
+        # Oldest group has 9 dice + 1 gift across a full final page: the gift does
+        # not count toward pull-set sizing, so the group cannot be proven complete.
+        self.assertEqual(len(exported), 5)
         self.assertEqual(len(warnings), 1)
-        self.assertEqual(warnings[0]["timestamp_raw"], "00dfdaa9c1097b23")
-        self.assertEqual(warnings[0]["records"], 11)
+        self.assertEqual(warnings[0]["dice_records"], 9)
+
+    def test_oldest_group_with_ten_dice_exports_on_full_final_page(self):
+        rows = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(2, "bb", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(3, "bb", "dice") for _ in range(5)]
+
+        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        exported = [row for row in annotated if row["export_record"] is True]
+
+        self.assertEqual(len(exported), 15)
+        self.assertEqual(len(warnings), 0)
+
+    def test_newest_group_stays_dropped_mid_history_even_if_dice_complete(self):
+        rows = [self._synthetic_row(3, "aa", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(4, "aa", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(5, "cc", "dice") for _ in range(4)]
+
+        annotated, warnings = annotate_groups(rows, starts_from_page_1=False)
+        exported = [row for row in annotated if row["export_record"] is True]
+
+        # Scan started mid-history: even 10 seen dice rolls cannot prove the newest
+        # group is whole, because newer same-timestamp rows would shift ordinals.
+        self.assertEqual(len(exported), 4)
+        self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0]["dice_records"], 10)
 
     def test_full_reference_scan_exports_all_rows(self):

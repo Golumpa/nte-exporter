@@ -55,7 +55,7 @@ NTE history records do not appear to contain a unique server-side roll ID. UIDs 
 
 Because 10-pulls can span page boundaries, partial timestamp groups can produce unstable UIDs. Normal mode exports only complete/stable timestamp groups. Boundary groups are skipped with warnings when the exporter cannot prove they are complete.
 
-For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc groups are expected to be complete 10-pull timestamp groups.
+For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. An oldest boundary group whose dice-roll count is a complete multiple of 10 is treated as a finished pull set and exported even when the scan stopped on a full page. Arc groups are expected to be complete 10-pull timestamp groups.
 
 ## Current Adapters
 
