@@ -7,9 +7,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from nte_history_exporter import console
 from nte_history_exporter.constants import POOL_META
-from nte_history_exporter.decoder.arc import arc_stability_warnings, select_continuous_arc_run
-from nte_history_exporter.decoder.boundary import annotate_groups, page_gap_warnings
+from nte_history_exporter.decoder.arc import arc_stability_warnings
+from nte_history_exporter.decoder.boundary import annotate_groups, select_continuous_run_from_page_1
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
@@ -52,8 +53,7 @@ def run_live_capture(
     session = LiveHistorySession(local_ip)
 
     sock = open_raw_udp_socket(local_ip)
-    print(f"Device 0 ready~! Listening on {local_ip}")
-    print("Open either Monopoly history board. Capture will stay open until you press any key.")
+    console.print_live_instructions(local_ip)
 
     try:
         for packet in read_packets(sock):
@@ -75,7 +75,7 @@ def run_live_capture(
             if matched:
                 kind = session.pairs[-1][7] if session.pairs else "permanent"
                 label = POOL_META.get(kind, POOL_META["permanent"])["name"]
-                print(f"Captured {label} page {session.last_page_seen}")
+                console.print_page_captured(label, session.last_page_seen)
     finally:
         try:
             sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
@@ -86,14 +86,13 @@ def run_live_capture(
     exports = []
     for kind in session.kinds_seen():
         pairs = session.pairs_for_kind(kind)
-        best_run = session.best_run(kind)
+        best_run, run_warnings = select_continuous_run_from_page_1(pairs)
         rows = session.build_rows(kind)
         if kind == "arc_miracle_box":
-            _arc_run, gap_warnings = select_continuous_arc_run(pairs)
-            warnings = gap_warnings + arc_stability_warnings(rows)
+            warnings = run_warnings + arc_stability_warnings(rows)
         else:
-            rows, warnings = annotate_groups(rows, starts_from_page_1=bool(best_run and best_run[0][0] == 1))
-            warnings = page_gap_warnings(pairs, best_run) + warnings
+            rows, group_warnings = annotate_groups(rows)
+            warnings = run_warnings + group_warnings
         pages_seen = [p[0] for p in best_run]
         csv_path, json_path = export_paths(kind)
         if write_debug_csv:
@@ -116,21 +115,40 @@ def run_live_capture(
             }
         )
 
+    console.print_results_header()
     if not exports:
-        print("No Monopoly history pages were captured.")
+        console.print_problem("No history pages were captured.")
+        console.print_note("This tool must already be running when you press Start on the")
+        console.print_note("game's main menu. Log out to the main menu, enter the game")
+        console.print_note("again, then reopen the history screen.")
         return {"exports": []}
 
-    if copy_clipboard and len(exports) == 1:
-        payload = exports[0]["payload"]
-        copy_to_clipboard(payload)
-        print("Export copied to clipboard.")
-    elif len(exports) > 1:
-        print("Multiple banners captured; clipboard copy skipped.")
+    all_warnings = []
+    for item in exports:
+        scan = item["export"]["scan"]
+        console.print_export_summary(
+            item["export"]["banner"]["name"],
+            scan["decoded_records"],
+            scan["exported_records"],
+            scan["skipped_records"],
+        )
+        for warning in scan["warnings"]:
+            console.print_warning(warning["code"], warning["reason"], warning.get("records"))
+        all_warnings.extend(scan["warnings"])
+    console.maybe_print_incomplete_hint(all_warnings)
 
+    print()
     for item in exports:
         if item["csv_path"] is not None:
-            print(f"CSV written: {item['csv_path']}")
-        print(f"Export written: {item['json_path']}")
+            console.print_note(f"CSV written: {item['csv_path']}")
+        console.print_note(f"Export written: {item['json_path']}")
+
+    if copy_clipboard and len(exports) == 1:
+        copy_to_clipboard(exports[0]["payload"])
+        console.print_success("Export copied to clipboard - paste it straight into your tracker.")
+    elif len(exports) > 1:
+        console.print_note("Multiple banners captured; clipboard copy skipped so one export")
+        console.print_note("does not overwrite another.")
     return {"exports": exports}
 
 

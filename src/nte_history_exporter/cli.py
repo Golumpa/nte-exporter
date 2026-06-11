@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
+from nte_history_exporter import console
 from nte_history_exporter.adapters.mitmproxy_flows import decode_mitmproxy_flows
 from nte_history_exporter.decoder.arc import arc_stability_warnings
-from nte_history_exporter.decoder.boundary import annotate_groups, page_gap_warnings
+from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.runner import export_paths, run_live_capture
@@ -21,35 +22,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interface-ip", default=None, help="local IPv4 address to bind for live capture")
     parser.add_argument("--no-clipboard", action="store_true", help="do not copy live exports to clipboard")
     parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
-    parser.add_argument(
-        "--allow-boundary-records",
-        action="store_true",
-        help="Debug only: export boundary groups even when they may be partial.",
-    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    console.print_banner()
     if args.live or not args.capture_source:
-        result = run_live_capture(
+        run_live_capture(
             interface_ip=args.interface_ip,
             copy_clipboard=not args.no_clipboard,
             write_debug_csv=args.debug,
         )
-        for item in result["exports"]:
-            export = item["export"]
-            print(
-                "{banner}: decoded {decoded}, exported {exported}, skipped {skipped}.".format(
-                    banner=export["banner"]["name"],
-                    decoded=export["scan"]["decoded_records"],
-                    exported=export["scan"]["exported_records"],
-                    skipped=export["scan"]["skipped_records"],
-                )
-            )
-            for warning in export["scan"]["warnings"]:
-                suffix = f" ({warning['records']} records)" if "records" in warning else ""
-                print(f"WARNING {warning['code']}: {warning['reason']}{suffix}")
         return 0
 
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)
@@ -60,12 +44,8 @@ def main(argv: list[str] | None = None) -> int:
         best_run = decoded["best_arc_run"]
         pair_count = len(decoded["arc_pairs"])
     else:
-        rows, warnings = annotate_groups(
-            decoded["rows"],
-            starts_from_page_1=decoded["starts_from_page_1"],
-            stable_only=not args.allow_boundary_records,
-        )
-        warnings = page_gap_warnings(decoded["pairs"], decoded["best_run"]) + warnings
+        rows, group_warnings = annotate_groups(decoded["rows"])
+        warnings = decoded["run_warnings"] + group_warnings
         kind = decoded["best_run"][0][7] if decoded["best_run"] and len(decoded["best_run"][0]) > 7 else "permanent"
         best_run = decoded["best_run"]
         pair_count = len(decoded["pairs"])
@@ -83,19 +63,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     json_path.write_text(json.dumps(export, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    if args.debug:
-        print(f"CSV written: {out_path}")
-    print(f"JSON written: {json_path}")
-    print(
-        "Decoded {decoded}, exported {exported}, skipped {skipped}.".format(
-            decoded=export["scan"]["decoded_records"],
-            exported=export["scan"]["exported_records"],
-            skipped=export["scan"]["skipped_records"],
-        )
+    console.print_results_header()
+    console.print_export_summary(
+        export["banner"]["name"],
+        export["scan"]["decoded_records"],
+        export["scan"]["exported_records"],
+        export["scan"]["skipped_records"],
     )
     for warning in warnings:
-        suffix = f" ({warning['records']} records)" if "records" in warning else ""
-        print(f"WARNING {warning['code']}: {warning['reason']}{suffix}")
+        console.print_warning(warning["code"], warning["reason"], warning.get("records"))
+    console.maybe_print_incomplete_hint(warnings)
+    print()
+    if args.debug:
+        console.print_note(f"CSV written: {out_path}")
+    console.print_note(f"Export written: {json_path}")
     return 0
 
 

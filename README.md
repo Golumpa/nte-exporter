@@ -32,7 +32,7 @@ Live capture, Windows:
 .\run-exporter.ps1 --live
 ```
 
-Launch it before logging in, then open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as `Permanent_<date_time>.json`, `Limited_<date_time>.json`, or `Arc_<date_time>.json`.
+Launch it before pressing Start on the game's main menu so the game's UDP connection can be captured, then open any supported history board in game. If you are already in game, log out to the main menu and enter again. The tool keeps listening until you press any key. Exports are written under `exports\` as `Permanent_<date_time>.json`, `Limited_<date_time>.json`, or `Arc_<date_time>.json`.
 
 Pass `--debug` to also write the full research CSV next to each JSON export.
 
@@ -55,9 +55,11 @@ Live capture needs a local admin-capable packet socket on Windows. The prototype
 
 NTE history records do not appear to contain a unique server-side roll ID. UIDs are generated from decoded record fields and the record's order within all rows sharing the same raw timestamp.
 
-Because 10-pulls can span page boundaries, partial timestamp groups can produce unstable UIDs. Normal mode exports only complete/stable timestamp groups. Boundary groups are skipped with warnings when the exporter cannot prove they are complete.
+History always loads page 1 first and is scrolled downward, so the exporter anchors to the continuous run of pages starting at page 1 and ignores anything after the first gap (with a warning). This keeps the newest pages even if a later page is lost, and guarantees the newest timestamp group's ordinal 0 is captured.
 
-For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. An oldest boundary group whose dice-roll count is a complete multiple of 10 is treated as a finished pull set and exported even when the scan stopped on a full page. Arc groups are expected to be complete 10-pull timestamp groups.
+Within a timestamp group, ordinal 0 is the newest record and unseen rows can only append after the captured ones, so every exported UID is stable. The one nuance is the oldest captured group: if the capture did not reach the true end of history and its dice-roll count is not a complete multiple of 10, it may be an unfinished 10-pull continuing onto an uncaptured page. Its captured prefix is still ordinal-stable, so it is exported with an informational warning telling you to scroll further to capture the rest.
+
+For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls, so the same rule applies with a fixed group size of 10. In both systems the oldest captured group is exported even if it is an unfinished pull set (its captured prefix is ordinal-stable), and flagged with a warning so you know to scroll further on a later scan.
 
 ## Current Adapters
 

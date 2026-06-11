@@ -27,7 +27,7 @@ def build_export_json(
     pool = next((meta for meta in POOL_META.values() if meta["id"] == pool_group_id), POOL_META["permanent"])
     scan: dict[str, Any] = {
         "mode": "stable_only",
-        "boundary_policy": "drop_incomplete_timestamp_groups",
+        "boundary_policy": "export_ordinal_stable_groups",
         "decoded_records": len(rows),
         "exported_records": len(exported),
         "skipped_records": len(rows) - len(exported),

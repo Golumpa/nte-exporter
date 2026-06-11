@@ -4,7 +4,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from nte_history_exporter.decoder.boundary import longest_monotonic_page_run
+from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.arc import (
     arc_request_page,
     build_arc_rows_from_pairs,
@@ -128,7 +128,7 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         if response_index is not None:
             pairs.append((page, offset, i, ts, response_index, response_ts, response_content, kind))
 
-    best_run = longest_monotonic_page_run(pairs)
+    best_run, run_warnings = select_continuous_run_from_page_1(pairs)
     rows_out = build_rows_from_pairs(best_run)
     best_arc_run, arc_warnings = select_continuous_arc_run(arc_pairs)
     arc_rows = build_arc_rows_from_pairs(best_arc_run)
@@ -137,10 +137,10 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         "flow_index": resolved_flow_index,
         "pairs": pairs,
         "best_run": best_run,
+        "run_warnings": run_warnings,
         "rows": rows_out,
         "arc_pairs": arc_pairs,
         "best_arc_run": best_arc_run,
         "arc_rows": arc_rows,
         "arc_warnings": arc_warnings,
-        "starts_from_page_1": bool(best_run and best_run[0][0] == 1),
     }

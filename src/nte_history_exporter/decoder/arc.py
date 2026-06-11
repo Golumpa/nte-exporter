@@ -19,7 +19,7 @@ from nte_history_exporter.constants import (
     GAME_UID_PART,
     POOL_META,
 )
-from nte_history_exporter.decoder.boundary import longest_monotonic_page_run
+from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.run import fmt_packet_time
 from nte_history_exporter.mappings import ARC_META
 
@@ -145,24 +145,36 @@ def annotate_arc_groups(rows: list[dict[str, Any]]) -> None:
     for index, row in enumerate(rows):
         groups[row["timestamp_raw_hex"]].append(index)
 
-    for group_index, (timestamp_raw, indexes) in enumerate(groups.items()):
-        complete = len(indexes) % 10 == 0
+    group_items = list(groups.items())
+    for group_index, (timestamp_raw, indexes) in enumerate(group_items):
+        at_oldest_boundary = group_index == len(group_items) - 1
+        # Arc pulls are always 10-pulls, so the only group that can be short is
+        # the oldest one, where the scan stopped mid-10-pull. Its captured prefix
+        # is ordinal-stable (ordinal 0 is captured, unseen rows append after it),
+        # so export it and flag it rather than dropping it.
+        incomplete = at_oldest_boundary and len(indexes) % 10 != 0
+        skip_reason = (
+            "arc timestamp group is not a complete 10-pull in this capture; "
+            "exported rows are stable, scroll further to capture the rest"
+            if incomplete
+            else ""
+        )
         for ordinal, index in enumerate(indexes):
             row = rows[index]
             row["timestamp_group_index"] = group_index
             row["timestamp_group_ordinal"] = ordinal
             row["timestamp_group_size_seen"] = len(indexes)
             row["uid"] = make_arc_uid(timestamp_raw, ordinal, row["reward_key_hex"])
-            row["uid_status"] = "stable" if complete else "skipped_incomplete_timestamp_group"
-            row["export_record"] = complete
-            row["skip_reason"] = "" if complete else "arc timestamp group is not a complete 10-pull in this capture"
+            row["uid_status"] = "incomplete_stable" if incomplete else "stable"
+            row["export_record"] = True
+            row["skip_reason"] = skip_reason
 
 
 def arc_stability_warnings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     warnings = []
     seen = set()
     for row in rows:
-        if row.get("export_record") is True:
+        if row.get("uid_status") != "incomplete_stable":
             continue
         timestamp_raw = row["timestamp_raw_hex"]
         if timestamp_raw in seen:
@@ -171,38 +183,18 @@ def arc_stability_warnings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         group = [r for r in rows if r["timestamp_raw_hex"] == timestamp_raw]
         warnings.append(
             {
-                "code": "INCOMPLETE_ARC_10_PULL_DROPPED",
+                "code": "INCOMPLETE_ARC_10_PULL_EXPORTED",
                 "timestamp_raw": timestamp_raw,
                 "timestamp_decoded": row["timestamp_decoded"],
                 "records": len(group),
-                "reason": "arc timestamp group is not a complete 10-pull in this capture",
+                "reason": (
+                    "arc timestamp group is not a complete 10-pull in this capture; "
+                    "exported rows are stable, scroll further to capture the rest"
+                ),
             }
         )
     return warnings
 
 
 def select_continuous_arc_run(pairs: list[tuple]) -> tuple[list[tuple], list[dict[str, Any]]]:
-    warnings: list[dict[str, Any]] = []
-    if not pairs:
-        return [], warnings
-    pairs_by_page = {pair[0]: pair for pair in pairs}
-    seen_pages = sorted(pairs_by_page)
-    if 1 in pairs_by_page:
-        selected_pages = []
-        page = 1
-        while page in pairs_by_page:
-            selected_pages.append(page)
-            page += 1
-        if len(selected_pages) < len(seen_pages):
-            ignored = [page for page in seen_pages if page not in selected_pages]
-            warnings.append(
-                {
-                    "code": "PAGE_GAP_DETECTED",
-                    "ignored_pages": ignored,
-                    "reason": f"Using continuous pages 1-{selected_pages[-1]}; ignored later pages {ignored}.",
-                }
-            )
-        return [pairs_by_page[page] for page in selected_pages], warnings
-
-    warnings.append({"code": "DID_NOT_START_AT_PAGE_1", "reason": "Arc history scan did not start at page 1."})
-    return longest_monotonic_page_run(pairs), warnings
+    return select_continuous_run_from_page_1(pairs)

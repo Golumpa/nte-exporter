@@ -11,7 +11,7 @@ from nte_history_exporter.decoder.arc import (
     parse_arc_response,
     select_continuous_arc_run,
 )
-from nte_history_exporter.decoder.boundary import longest_monotonic_page_run
+from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.protocol import (
     history_request_kind,
     is_history_request,
@@ -147,7 +147,5 @@ class LiveHistorySession:
 
     def best_run(self, kind: str | None = None) -> list[tuple]:
         pairs = self.pairs_for_kind(kind) if kind else self.pairs
-        if kind == "arc_miracle_box":
-            best_run, _warnings = select_continuous_arc_run(pairs)
-            return best_run
-        return longest_monotonic_page_run(pairs)
+        best_run, _warnings = select_continuous_run_from_page_1(pairs)
+        return best_run

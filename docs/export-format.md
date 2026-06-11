@@ -20,7 +20,7 @@ The sanitized JSON export uses:
   },
   "scan": {
     "mode": "stable_only",
-    "boundary_policy": "drop_incomplete_timestamp_groups",
+    "boundary_policy": "export_ordinal_stable_groups",
     "decoded_records": 0,
     "exported_records": 0,
     "skipped_records": 0,

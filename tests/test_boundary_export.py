@@ -14,12 +14,13 @@ if str(SRC) not in sys.path:
 
 from nte_history_exporter.decoder.boundary import annotate_groups, make_uid
 from nte_history_exporter.constants import LIMITED_CHARACTER_MARKER, MARKER
-from nte_history_exporter.decoder.boundary import page_gap_warnings
+from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.protocol import decode_response_records, history_request_kind
 from nte_history_exporter.constants import POOL_META
 from nte_history_exporter.mappings import ARC_META, CHARACTERS, ITEMS, REWARDS_BY_ID
 from nte_history_exporter.decoder.protocol import decode_reward_key, infer_reward_type
 from nte_history_exporter.decoder.arc import (
+    arc_stability_warnings,
     build_arc_rows_from_pairs,
     decode_arc_key,
     decode_arc_timestamp,
@@ -164,7 +165,7 @@ class BoundaryExportTests(unittest.TestCase):
 
     def test_pages_1_to_5_exports_dice_complete_oldest_group(self):
         rows = load_reference_csv("monopoly_history_poc_13_pages_1_to_5_v4.csv")
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
 
         exported = [row for row in annotated if row["export_record"] is True]
         skipped = [row for row in annotated if row["export_record"] is False]
@@ -188,49 +189,75 @@ class BoundaryExportTests(unittest.TestCase):
             "quantity": 1,
         }
 
-    def test_oldest_group_with_partial_dice_count_still_drops(self):
+    def test_oldest_group_with_partial_dice_count_exports_with_warning(self):
         rows = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
         rows += [self._synthetic_row(2, "bb", "dice") for _ in range(5)]
         rows += [self._synthetic_row(3, "bb", "dice") for _ in range(4)]
         rows += [self._synthetic_row(3, "bb", "points_gift")]
 
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
         exported = [row for row in annotated if row["export_record"] is True]
 
-        # Oldest group has 9 dice + 1 gift across a full final page: the gift does
-        # not count toward pull-set sizing, so the group cannot be proven complete.
-        self.assertEqual(len(exported), 5)
+        # Oldest group is an unfinished 10-pull on a full final page. Its captured
+        # prefix is ordinal-stable, so it is exported with an informational warning
+        # rather than dropped.
+        self.assertEqual(len(exported), 15)
         self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["code"], "INCOMPLETE_TIMESTAMP_GROUP_EXPORTED")
         self.assertEqual(warnings[0]["dice_records"], 9)
+        oldest = [row for row in annotated if row["timestamp_raw_hex"] == "bb"]
+        self.assertTrue(all(row["uid"] for row in oldest))
+        self.assertEqual([row["timestamp_group_ordinal"] for row in oldest], list(range(10)))
+
+    def test_incomplete_oldest_prefix_keeps_stable_uids(self):
+        full = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
+        full += [self._synthetic_row(2, "bb", "dice") for _ in range(3)]
+        full += [self._synthetic_row(3, "bb", "dice") for _ in range(2)]
+        truncated = [r for r in full if r["page"] in (1, 2)]
+
+        full_rows, _ = annotate_groups([dict(r) for r in full])
+        trunc_rows, _ = annotate_groups([dict(r) for r in truncated])
+
+        full_uids = [r["uid"] for r in full_rows if r["timestamp_raw_hex"] == "bb"][:3]
+        trunc_uids = [r["uid"] for r in trunc_rows if r["timestamp_raw_hex"] == "bb"]
+        # Capturing only the first 3 of a 5-record oldest group yields the same
+        # UIDs those rows have in the full capture.
+        self.assertEqual(len(trunc_uids), 3)
+        self.assertEqual(trunc_uids, full_uids)
 
     def test_oldest_group_with_ten_dice_exports_on_full_final_page(self):
         rows = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
         rows += [self._synthetic_row(2, "bb", "dice") for _ in range(5)]
         rows += [self._synthetic_row(3, "bb", "dice") for _ in range(5)]
 
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
         exported = [row for row in annotated if row["export_record"] is True]
 
         self.assertEqual(len(exported), 15)
         self.assertEqual(len(warnings), 0)
 
-    def test_newest_group_stays_dropped_mid_history_even_if_dice_complete(self):
-        rows = [self._synthetic_row(3, "aa", "dice") for _ in range(5)]
-        rows += [self._synthetic_row(4, "aa", "dice") for _ in range(5)]
-        rows += [self._synthetic_row(5, "cc", "dice") for _ in range(4)]
+    def test_run_selection_anchors_to_page_1_and_keeps_newest(self):
+        # Page 2's response was lost: captured pages 1, 3, 4, 5.
+        pairs = [(p, p * 2, 0, 0, 0, 0, b"", "permanent") for p in (1, 3, 4, 5)]
+        run, warnings = select_continuous_run_from_page_1(pairs)
 
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=False)
-        exported = [row for row in annotated if row["export_record"] is True]
-
-        # Scan started mid-history: even 10 seen dice rolls cannot prove the newest
-        # group is whole, because newer same-timestamp rows would shift ordinals.
-        self.assertEqual(len(exported), 4)
+        # The page-1 run (just page 1, the newest history) is kept; later pages are
+        # ignored with a gap warning, never silently discarding page 1.
+        self.assertEqual([p[0] for p in run], [1])
         self.assertEqual(len(warnings), 1)
-        self.assertEqual(warnings[0]["dice_records"], 10)
+        self.assertEqual(warnings[0]["code"], "PAGE_GAP_DETECTED")
+        self.assertEqual(warnings[0]["ignored_pages"], [3, 4, 5])
+
+    def test_run_selection_warns_when_page_1_missing(self):
+        pairs = [(p, p * 2, 0, 0, 0, 0, b"", "permanent") for p in (3, 4, 5)]
+        run, warnings = select_continuous_run_from_page_1(pairs)
+
+        self.assertEqual([p[0] for p in run], [3, 4, 5])
+        self.assertEqual(warnings[0]["code"], "DID_NOT_START_AT_PAGE_1")
 
     def test_full_reference_scan_exports_all_rows(self):
         rows = load_reference_csv("monopoly_history_poc_10_all_44_pages_v4.csv")
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
         exported = [row for row in annotated if row["export_record"] is True]
 
         json_path = EXPORTS / "monopoly_history_export_10_all_44_pages_v4.json"
@@ -247,7 +274,7 @@ class BoundaryExportTests(unittest.TestCase):
 
     def test_sanitized_export_omits_raw_packet_fields(self):
         rows = load_reference_csv("monopoly_history_poc_13_pages_1_to_5_v4.csv")
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
         export = build_export_json(annotated, warnings)
 
         self.assertEqual(export["format"], "nte-history-export")
@@ -314,12 +341,10 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(make_uid(decoded, int(reference["timestamp_group_ordinal"])), "7d035ec098f856f81b403ea538810145")
 
     def test_page_gap_warning_reports_ignored_pages(self):
-        pairs = [(1,), (2,), (3,), (5,)]
-        best_run = [(1,), (2,), (3,)]
-        warnings = page_gap_warnings(pairs, best_run)
+        pairs = [(p, p * 2, 0, 0, 0, 0, b"", "permanent") for p in (1, 2, 3, 5)]
+        run, warnings = select_continuous_run_from_page_1(pairs)
+        self.assertEqual([p[0] for p in run], [1, 2, 3])
         self.assertEqual(warnings[0]["code"], "PAGE_GAP_DETECTED")
-        self.assertEqual(warnings[0]["previous_page"], 3)
-        self.assertEqual(warnings[0]["next_page"], 5)
         self.assertEqual(warnings[0]["ignored_pages"], [5])
 
     def test_arc_key_timestamp_and_uid_match_reference(self):
@@ -341,7 +366,7 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded[0]["reward_type"], "arc")
         self.assertEqual(decoded[0]["reward_key_hex"], reference_rows[0]["arc_key_hex"])
 
-    def test_arc_partial_timestamp_group_is_skipped(self):
+    def test_arc_partial_timestamp_group_is_exported_with_warning(self):
         rows = load_arc_csv("arc_pages_1_to_5_v2.csv")
         pairs = []
         for page in range(1, 6):
@@ -350,10 +375,34 @@ class BoundaryExportTests(unittest.TestCase):
             pairs.append((page, page * 2, page, 1.0, page + 100, 1.1, response))
         decoded = build_arc_rows_from_pairs(pairs)
         exported = [row for row in decoded if row["export_record"] is True]
-        skipped = [row for row in decoded if row["export_record"] is False]
+        incomplete = [row for row in decoded if row["uid_status"] == "incomplete_stable"]
+        warnings = arc_stability_warnings(decoded)
+
+        # The oldest group is a 10-pull split by stopping at page 5 (5 of 10 rows).
+        # Its captured prefix is ordinal-stable, so it is exported, not dropped.
         self.assertEqual(len(decoded), 25)
-        self.assertEqual(len(exported), 20)
-        self.assertEqual(len(skipped), 5)
+        self.assertEqual(len(exported), 25)
+        self.assertEqual(len(incomplete), 5)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["code"], "INCOMPLETE_ARC_10_PULL_EXPORTED")
+        self.assertTrue(all(row["uid"] for row in incomplete))
+
+    def test_arc_incomplete_prefix_keeps_stable_uids(self):
+        rows = load_arc_csv("arc_pull_10_all_pages_v2.csv")
+        # Build a full 2-page (10-record) group, then a truncated 1-page version.
+        full_pairs, trunc_pairs = [], []
+        for page in (1, 2):
+            page_rows = [r for r in rows if int(r["page"]) == page]
+            response = bytes(0x4C) + b"".join(bytes.fromhex(r["record_hex"]) for r in page_rows)
+            full_pairs.append((page, page * 2, page, 1.0, page + 100, 1.1, response))
+            if page == 1:
+                trunc_pairs.append((page, page * 2, page, 1.0, page + 100, 1.1, response))
+
+        ts = rows[0]["timestamp_raw_hex"]
+        full = [r for r in build_arc_rows_from_pairs(full_pairs) if r["timestamp_raw_hex"] == ts]
+        trunc = [r for r in build_arc_rows_from_pairs(trunc_pairs) if r["timestamp_raw_hex"] == ts]
+        self.assertTrue(trunc)
+        self.assertEqual([r["uid"] for r in trunc], [r["uid"] for r in full[: len(trunc)]])
 
     def test_arc_row_builder_accepts_live_pairs_with_kind(self):
         reference_rows = load_arc_csv("arc_pull_10_all_pages_v2.csv")[:5]
@@ -419,7 +468,7 @@ class BoundaryExportTests(unittest.TestCase):
             },
         ]
 
-        annotated, warnings = annotate_groups(rows, starts_from_page_1=True)
+        annotated, warnings = annotate_groups(rows)
 
         self.assertEqual([row["timestamp_group_ordinal"] for row in annotated[:4]], [0, 1, 2, 3])
         self.assertEqual({row["timestamp_group_size_seen"] for row in annotated[:4]}, {2})

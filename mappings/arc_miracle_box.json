@@ -27,6 +27,6 @@
   },
   "notes": [
     "Arc history is separate from Monopoly history.",
-    "Arc timestamp groups are expected to be complete 10-pull groups."
+    "Arc timestamp groups are 10-pull groups; an incomplete oldest group is still exported (stable prefix) with a warning."
   ]
 }
