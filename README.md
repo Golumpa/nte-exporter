@@ -1,12 +1,16 @@
-<img src="docs/images/hathor_card.webp" align="right" width="180" alt="Hathor" />
+<div align="center">
+
+<img src="docs/images/main.png" width="200" alt="NTE History Exporter" />
 
 # NTE History Exporter
 
-> Prototype CLI exporter for **Neverness to Everness** pull history — decodes your own game traffic into sanitized JSON ready for tracker import.
+Prototype CLI exporter for **Neverness to Everness** pull history — decodes your own game traffic into sanitized JSON ready for tracker import.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
 ![Status](https://img.shields.io/badge/status-prototype-orange)
+
+</div>
 
 ## Supported Banners
 
@@ -90,3 +94,9 @@ For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for 
 
 - Live Npcap/libpcap and/or pktmon capture
 - UI wrapper around the CLI
+
+## Example Run
+
+<div align="center">
+  <img src="docs/images/cli-demo.png" width="480" alt="Live capture session: instructions, captured pages, and the results summary" />
+</div>
