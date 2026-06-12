@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import msvcrt
-import socket
+import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -12,8 +12,10 @@ from nte_history_exporter.constants import POOL_META
 from nte_history_exporter.decoder.boundary import annotate_groups, select_continuous_run_from_page_1
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
+from nte_history_exporter.live_capture.backends import open_capture_backend
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
-from nte_history_exporter.live_capture.windows_raw import detect_local_ipv4, open_raw_udp_socket, read_packets
+from nte_history_exporter.live_capture.stop_key import StopKeyMonitor
+from nte_history_exporter.live_capture.windows_raw import detect_local_ipv4
 
 
 EXPORT_PREFIXES = {
@@ -23,7 +25,7 @@ EXPORT_PREFIXES = {
 }
 
 
-def copy_to_clipboard(text: str) -> None:
+def copy_to_clipboard(text: str) -> bool:
     try:
         import tkinter as tk
 
@@ -33,54 +35,99 @@ def copy_to_clipboard(text: str) -> None:
         root.clipboard_append(text)
         root.update()
         root.destroy()
-        return
+        return True
     except Exception:
         pass
 
-    import subprocess
+    commands = []
+    if sys.platform == "win32":
+        commands.append(["clip"])
+    elif sys.platform == "darwin":
+        commands.append(["pbcopy"])
+    else:
+        commands.extend([["wl-copy"], ["xclip", "-selection", "clipboard"]])
 
-    subprocess.run(["clip"], input=text, text=True, check=True)
+    for command in commands:
+        try:
+            subprocess.run(command, input=text, text=True, check=True)
+            return True
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            continue
+    return False
 
 
 def run_live_capture(
     *,
     interface_ip: str | None = None,
+    capture_backend: str = "auto",
     copy_clipboard: bool = True,
     write_debug_csv: bool = False,
 ) -> dict:
     local_ip = interface_ip or detect_local_ipv4()
     session = LiveHistorySession(local_ip)
 
-    sock = open_raw_udp_socket(local_ip)
-    console.print_live_instructions(local_ip)
+    capture = open_capture_backend(local_ip, capture_backend)
+    console.print_live_instructions(local_ip, capture.name, capture.detail)
+    if capture.fallback_reason:
+        console.print_capture_fallback(capture.fallback_reason)
+    reported_missing_pages: dict[str, tuple[int, ...]] = {}
 
     try:
-        for packet in read_packets(sock):
-            if msvcrt.kbhit():
-                msvcrt.getch()
-                break
-            if packet is None:
-                continue
-            matched = session.process_packet(
-                UdpPacket(
-                    timestamp=time.time(),
-                    src_ip=packet.src_ip,
-                    dst_ip=packet.dst_ip,
-                    src_port=packet.src_port,
-                    dst_port=packet.dst_port,
-                    payload=packet.payload,
+        with StopKeyMonitor() as stop_key:
+            for packet in capture.packets():
+                if stop_key.pressed():
+                    break
+                if packet is None:
+                    continue
+                pair_count_before = len(session.pairs)
+                matched = session.process_packet(
+                    UdpPacket(
+                        timestamp=time.time(),
+                        src_ip=packet.src_ip,
+                        dst_ip=packet.dst_ip,
+                        src_port=packet.src_port,
+                        dst_port=packet.dst_port,
+                        payload=packet.payload,
+                    )
                 )
-            )
-            if matched:
-                kind = session.pairs[-1][7] if session.pairs else "permanent"
-                label = POOL_META.get(kind, POOL_META["permanent"])["name"]
-                console.print_page_captured(label, session.last_page_seen)
+                if matched:
+                    affected_kinds = []
+                    for pair in session.pairs[pair_count_before:]:
+                        page = pair[0]
+                        kind = pair[7] if len(pair) > 7 else "permanent"
+                        label = POOL_META.get(kind, POOL_META["permanent"])["name"]
+                        was_replacement = any(
+                            existing[0] == page
+                            and (existing[7] if len(existing) > 7 else "permanent") == kind
+                            for existing in session.pairs[:pair_count_before]
+                        )
+                        console.print_page_captured(label, page, recaptured=was_replacement)
+                        if kind not in affected_kinds:
+                            affected_kinds.append(kind)
+
+                    for kind in affected_kinds:
+                        label = POOL_META.get(kind, POOL_META["permanent"])["name"]
+                        missing_pages = tuple(session.missing_pages(kind))
+                        previously_missing = reported_missing_pages.get(kind, ())
+                        if missing_pages and missing_pages != previously_missing:
+                            reasons = {
+                                page: session.missing_page_reason(kind, page)
+                                for page in missing_pages
+                            }
+                            console.print_missing_pages(label, list(missing_pages), reasons)
+                        elif previously_missing and not missing_pages:
+                            console.print_page_gap_recovered(label)
+                        reported_missing_pages[kind] = missing_pages
     finally:
-        try:
-            sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
-        except Exception:
-            pass
-        sock.close()
+        stats = capture.stats()
+        capture.close()
+
+    if stats:
+        console.print_capture_stats(
+            stats.received,
+            stats.dropped,
+            stats.interface_dropped,
+        )
 
     exports = []
     for kind in session.kinds_seen():
@@ -138,8 +185,10 @@ def run_live_capture(
         console.print_note(f"Export written: {item['json_path']}")
 
     if copy_clipboard and len(exports) == 1:
-        copy_to_clipboard(exports[0]["payload"])
-        console.print_success("Export copied to clipboard - paste it straight into your tracker.")
+        if copy_to_clipboard(exports[0]["payload"]):
+            console.print_success("Export copied to clipboard - paste it straight into your tracker.")
+        else:
+            console.print_note("Clipboard tool unavailable; use the JSON file shown above.")
     elif len(exports) > 1:
         console.print_note("Multiple banners captured; clipboard copy skipped so one export")
         console.print_note("does not overwrite another.")

@@ -8,17 +8,24 @@ from nte_history_exporter.adapters.mitmproxy_flows import decode_mitmproxy_flows
 from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
+from nte_history_exporter.live_capture.libpcap import LibpcapUnavailable
 from nte_history_exporter.live_capture.runner import export_paths, run_live_capture
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Decode NTE Monopoly history from mitmproxy .flows captures or live capture."
+        description="Decode NTE pull history from mitmproxy .flows captures or live capture."
     )
     parser.add_argument("capture_source", nargs="?", help="mitmproxy .flows file; omit when using --live")
     parser.add_argument("--live", action="store_true", help="capture live UDP traffic instead of reading a .flows file")
     parser.add_argument("--flow-index", type=int, default=None)
     parser.add_argument("--interface-ip", default=None, help="local IPv4 address to bind for live capture")
+    parser.add_argument(
+        "--capture-backend",
+        choices=["auto", "libpcap", "raw"],
+        default="auto",
+        help="live capture backend; auto prefers Npcap/libpcap and falls back to raw sockets on Windows",
+    )
     parser.add_argument("--no-clipboard", action="store_true", help="do not copy live exports to clipboard")
     parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
     return parser
@@ -28,12 +35,18 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     console.print_banner()
     if args.live or not args.capture_source:
-        run_live_capture(
-            interface_ip=args.interface_ip,
-            copy_clipboard=not args.no_clipboard,
-            write_debug_csv=args.debug,
-        )
-        return 0
+        try:
+            run_live_capture(
+                interface_ip=args.interface_ip,
+                capture_backend=args.capture_backend,
+                copy_clipboard=not args.no_clipboard,
+                write_debug_csv=args.debug,
+            )
+            return 0
+        except (LibpcapUnavailable, PermissionError) as exc:
+            console.print_problem(str(exc))
+            console.print_note("Install/enable Npcap or libpcap and run with packet-capture permissions.")
+            return 1
 
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)
     if decoded["arc_rows"] and not decoded["rows"]:

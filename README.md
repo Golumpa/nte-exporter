@@ -7,7 +7,7 @@
 Prototype CLI exporter for **Neverness to Everness** pull history — decodes your own game traffic into sanitized JSON ready for tracker import.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)
 ![Status](https://img.shields.io/badge/status-prototype-orange)
 
 </div>
@@ -27,9 +27,28 @@ The exporter decodes Permanent Board, Limited Character Board, and Arc Miracle B
 > [!NOTE]
 > The import JSON contains decoded history rows only. It does **not** export tokens, account IDs, role IDs, device IDs, server IPs, raw packets, cookies, session data, or any other capture metadata.
 
+## Requirements
+
+- Python 3.10 or newer.
+- Packet-capture permission: Administrator on Windows, or root/capture capabilities on Linux and macOS.
+- **Windows:** [Npcap](https://npcap.com/) is recommended. Install it normally; WinPcap API-compatible mode is not required. If Npcap is unavailable or cannot be initialized, `auto` falls back to the Windows built-in raw-socket backend.
+- **Linux:** install the system **libpcap** runtime if it is not already present. Package names commonly include `libpcap0.8` on Debian/Ubuntu and `libpcap` on Fedora, Arch, and similar distributions.
+- **macOS:** the system normally includes **libpcap**, so no separate Npcap installation is needed.
+
+Npcap is Windows-only and is not bundled with this project. Linux and macOS use libpcap, the cross-platform capture library on which Npcap is based.
+
 ## Usage
 
-### Live capture (Windows, requires Administrator)
+### Live capture
+
+The default `auto` capture backend uses:
+
+- **Windows:** Npcap when installed, with automatic fallback to the built-in Windows raw-socket backend.
+- **Linux/macOS:** the system libpcap library.
+
+Use `--capture-backend libpcap` to require Npcap/libpcap without fallback, or `--capture-backend raw` to require the Windows raw-socket backend.
+
+#### Windows (requires Administrator)
 
 ```powershell
 .\run-exporter.ps1 --live
@@ -48,6 +67,21 @@ Once running, open any supported history board in game. The tool keeps listening
 
 If only one banner is captured, the export JSON is copied to your clipboard. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
 
+If a page response is missed, the exporter reports the missing page number while capture is still running. Leave the exporter open, close and reopen that history board, then scroll down again. Scrolling backward within the existing view does not request the cached pages again. The replacement capture is accepted and the tool confirms when the gap has been recovered. If reopening the board still produces no page messages, return to the main menu and re-enter the game to start a fresh connection.
+
+#### Linux/macOS
+
+Install the project and ensure the system libpcap runtime is available:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+sudo .venv/bin/nte-history-exporter --live
+```
+
+macOS normally includes libpcap. On Linux, install the distribution's libpcap runtime package if it is not already present. Capture can also be granted through platform-specific capabilities instead of running the whole exporter with `sudo`.
+
 ### File replay
 
 ```powershell
@@ -62,6 +96,14 @@ Decodes a `mitmproxy .flows` capture instead of listening live — used for rese
 | --------- | --------------------------------------------------- |
 | `--live`  | Capture live UDP traffic instead of reading a file. |
 | `--debug` | Also write the full research CSV next to each JSON. |
+
+Advanced live-capture selection:
+
+```text
+--capture-backend auto      Prefer Npcap/libpcap; fall back to raw sockets on Windows
+--capture-backend libpcap   Require Npcap on Windows or libpcap on Linux/macOS
+--capture-backend raw       Require the Windows raw-socket backend
+```
 
 The `--debug` CSV holds any extra information that might be needed for fixing bugs. It contains no dangerous personal account data — only the raw bytes of the captured history page.
 
@@ -87,12 +129,13 @@ For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for 
 
 **Current**
 
-- Live Windows raw-socket capture
+- Live Npcap/libpcap capture on Windows, Linux, and macOS
+- Live Windows raw-socket fallback
 - `mitmproxy .flows` research decoder
 
 **Planned**
 
-- Live Npcap/libpcap and/or pktmon capture
+- Optional pktmon diagnostics for capture-drop investigation
 - UI wrapper around the CLI
 
 ## Example Run

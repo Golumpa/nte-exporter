@@ -61,9 +61,11 @@ def print_banner() -> None:
     print(rule("="))
 
 
-def print_live_instructions(local_ip: str) -> None:
+def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail: str = "") -> None:
     print()
     print(style("  Listening on ", DIM) + style(local_ip, BOLD))
+    backend_detail = f" ({detail})" if detail and detail != local_ip else ""
+    print(style(f"  Capture backend: {backend}{backend_detail}", DIM))
     print()
     print(style("  How to export your pull history", BOLD))
     print("    1. This tool must be running BEFORE you press Start on")
@@ -84,8 +86,38 @@ def print_live_instructions(local_ip: str) -> None:
     print(rule())
 
 
-def print_page_captured(label: str, page: int | None) -> None:
-    print(style("  + ", GREEN, BOLD) + label + style(f"  page {page}", DIM))
+def print_page_captured(label: str, page: int | None, *, recaptured: bool = False) -> None:
+    action = "recaptured" if recaptured else "page"
+    print(style("  + ", GREEN, BOLD) + label + style(f"  {action} {page}", DIM))
+
+
+def print_missing_pages(label: str, pages: list[int], reasons: dict[int, str] | None = None) -> None:
+    page_list = ", ".join(str(page) for page in pages)
+    print(style("  ! ", YELLOW, BOLD) + f"{label} missing page(s): {page_list}.")
+    if reasons:
+        for page in pages:
+            print(style(f"    Page {page}: {reasons[page]}.", DIM))
+    print("    Close and reopen this history board, then scroll down again.")
+
+
+def print_page_gap_recovered(label: str) -> None:
+    print(style("  + ", GREEN, BOLD) + f"{label} page gap recovered.")
+
+
+def print_capture_stats(received: int, dropped: int, interface_dropped: int) -> None:
+    text = (
+        f"Capture stats: processed {received}, buffer dropped {dropped}, "
+        f"interface dropped {interface_dropped}"
+    )
+    if dropped or interface_dropped:
+        print(style(f"  ! {text}", YELLOW, BOLD))
+    else:
+        print(style(f"  {text}", DIM))
+
+
+def print_capture_fallback(reason: str) -> None:
+    print(style("  ! Npcap unavailable; using Windows raw capture.", YELLOW))
+    print(style(f"    {reason}", DIM))
 
 
 def print_results_header() -> None:

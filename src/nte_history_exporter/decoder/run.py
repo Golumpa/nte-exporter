@@ -20,6 +20,9 @@ def build_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
         kind = pair[7] if len(pair) > 7 else "permanent"
         pool = POOL_META.get(kind, POOL_META["permanent"])
         records = decode_response_records(response_content)
+        if len(pair) > 9:
+            slice_start, slice_count = pair[8:10]
+            records = records[slice_start : slice_start + slice_count]
         if not records:
             rows_out.append(
                 {
@@ -38,7 +41,7 @@ def build_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
                 }
             )
             continue
-        for record in records:
+        for row_index, record in enumerate(records, start=1):
             rows_out.append(
                 {
                     "page": page,
@@ -52,6 +55,7 @@ def build_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
                     "response_len": len(response_content),
                     "record_count": len(records),
                     **record,
+                    "row": row_index,
                 }
             )
     return rows_out

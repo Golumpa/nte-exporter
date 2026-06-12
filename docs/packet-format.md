@@ -5,12 +5,20 @@ This prototype supports separate Monopoly and Arc/Gashapon history decoders.
 ## Monopoly
 
 - History is fetched over the UDP game connection.
-- Client history-page requests are 45 bytes.
+- A client history-page request has a 45-byte request prefix. UDP payloads may
+  contain additional coalesced transport data after that prefix.
 - History request constant: `4220` / `0x107c`.
 - Request selector `4`: `Lottery_Permanent`.
 - Request selector `8`: `Lottery_LimitedCharacter`.
 - Request page cursor: `page_number * 4`.
 - Normal server responses contain 5 history records.
+- The client can pipeline several page requests before responses arrive.
+- Under load, one server response can contain multiple consecutive pages. The
+  observed format contained 10 records representing two five-record pages,
+  with an internal response header before the second page's first record.
+- Some batched responses begin at a non-byte-aligned position in the UDP
+  payload. The decoder tests all LSB bit offsets; captures have been observed
+  where the record stream begins five bits into the byte stream.
 - The final page may contain fewer than 5 records.
 
 Decoded fields:
@@ -40,7 +48,8 @@ Pages are anchored to the continuous run starting at page 1 (history always load
 
 ## Arc / Gashapon
 
-- Arc history uses a separate 34-byte request.
+- Arc history uses a separate 34-byte request prefix and may likewise have
+  coalesced transport data after it.
 - Request constant: `2060` / `0x080c`.
 - Cursor step: `2`.
 - Pool: `Arc_MiracleBox`.

@@ -1,24 +1,12 @@
 from __future__ import annotations
 
-import struct
 from pathlib import Path
 from typing import Any
 
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
-from nte_history_exporter.decoder.arc import (
-    arc_request_page,
-    build_arc_rows_from_pairs,
-    is_arc_history_request,
-    parse_arc_response,
-    select_continuous_arc_run,
-)
-from nte_history_exporter.decoder.protocol import (
-    history_request_kind,
-    is_history_request,
-    request_page,
-    response_contains_history_marker,
-)
-from nte_history_exporter.decoder.run import build_rows_from_pairs, fmt_packet_time
+from nte_history_exporter.decoder.arc import build_arc_rows_from_pairs, select_continuous_arc_run
+from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
 
 
 def parse_tnetstring(data: bytes, i: int = 0) -> tuple[Any, int]:
@@ -87,47 +75,26 @@ def find_udp_flow(flows: list[Any], preferred_index: int | None = None) -> tuple
     return idx, flow
 
 
-def pair_response(messages: list[Any], request_index: int) -> tuple[int | None, bytes, float | None]:
-    for j in range(request_index + 1, min(request_index + 50, len(messages))):
-        from_client, content, ts = messages[j]
-        if not from_client and len(content) >= 150 and response_contains_history_marker(content):
-            return j, content, ts
-    return None, b"", None
-
-
-def pair_arc_response(messages: list[Any], request_index: int) -> tuple[int | None, bytes, float | None]:
-    for j in range(request_index + 1, min(request_index + 30, len(messages))):
-        from_client, content, ts = messages[j]
-        if not from_client and len(content) >= 100 and parse_arc_response(content):
-            return j, content, ts
-    return None, b"", None
-
-
 def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> dict[str, Any]:
     flows = read_flows(path)
     resolved_flow_index, flow = find_udp_flow(flows, flow_index)
     messages = flow[b"messages"]
 
-    pairs = []
-    arc_pairs = []
-    for i, msg in enumerate(messages):
+    local_ip = "192.0.2.1"
+    remote_ip = "198.51.100.1"
+    local_port = 50000
+    remote_port = 40000
+    session = LiveHistorySession(local_ip)
+    for msg in messages:
         from_client, content, ts = msg
-        if from_client and is_arc_history_request(content):
-            page = arc_request_page(content)
-            response_index, response_content, response_ts = pair_arc_response(messages, i)
-            if response_index is not None:
-                arc_pairs.append((page, page * 2, i, ts, response_index, response_ts, response_content))
-            continue
+        if from_client:
+            packet = UdpPacket(ts, local_ip, remote_ip, local_port, remote_port, content)
+        else:
+            packet = UdpPacket(ts, remote_ip, local_ip, remote_port, local_port, content)
+        session.process_packet(packet)
 
-        if not from_client or not is_history_request(content):
-            continue
-        kind = history_request_kind(content)
-        offset = struct.unpack_from("<I", content, 31)[0]
-        page = request_page(content)
-        response_index, response_content, response_ts = pair_response(messages, i)
-        if response_index is not None:
-            pairs.append((page, offset, i, ts, response_index, response_ts, response_content, kind))
-
+    pairs = [pair for pair in session.pairs if pair[7] != "arc_miracle_box"]
+    arc_pairs = [pair for pair in session.pairs if pair[7] == "arc_miracle_box"]
     best_run, run_warnings = select_continuous_run_from_page_1(pairs)
     rows_out = build_rows_from_pairs(best_run)
     best_arc_run, arc_warnings = select_continuous_arc_run(arc_pairs)

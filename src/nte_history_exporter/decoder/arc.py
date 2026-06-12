@@ -25,7 +25,7 @@ from nte_history_exporter.mappings import ARC_META
 
 
 def is_arc_history_request(content: bytes) -> bool:
-    return len(content) == ARC_HISTORY_REQUEST_LENGTH and struct.unpack_from("<I", content, 24)[0] == ARC_HISTORY_REQUEST_BANNER
+    return len(content) >= ARC_HISTORY_REQUEST_LENGTH and struct.unpack_from("<I", content, 24)[0] == ARC_HISTORY_REQUEST_BANNER
 
 
 def arc_request_page(content: bytes) -> int:
@@ -122,6 +122,9 @@ def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
     for pair in pairs:
         page, offset, req_i, req_ts, resp_i, resp_ts, response = pair[:7]
         records = parse_arc_response(response)
+        if len(pair) > 9:
+            slice_start, slice_count = pair[8:10]
+            records = records[slice_start : slice_start + slice_count]
         for row_index, record in enumerate(records, start=1):
             rows.append(
                 {

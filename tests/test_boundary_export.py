@@ -3,6 +3,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -20,13 +21,25 @@ from nte_history_exporter.constants import POOL_META
 from nte_history_exporter.mappings import ARC_META, CHARACTERS, ITEMS, REWARDS_BY_ID
 from nte_history_exporter.decoder.protocol import decode_reward_key, infer_reward_type
 from nte_history_exporter.decoder.arc import (
+    arc_request_page,
     build_arc_rows_from_pairs,
     decode_arc_key,
     decode_arc_timestamp,
+    is_arc_history_request,
     make_arc_uid,
     parse_arc_response,
 )
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
+from nte_history_exporter.live_capture.libpcap import (
+    DLT_EN10MB,
+    DLT_LINUX_SLL,
+    DLT_LINUX_SLL2,
+    DLT_LOOP,
+    DLT_RAW,
+    _extract_ipv4_frame,
+    LibpcapUnavailable,
+)
+from nte_history_exporter.live_capture.backends import open_capture_backend
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.pool_mappings import load_pool_mappings, pool_meta_from_mapping
 
@@ -70,6 +83,71 @@ def load_arc_csv(name):
 
 
 class BoundaryExportTests(unittest.TestCase):
+    def test_windows_auto_prefers_npcap(self):
+        capture = Mock(device=r"\Device\NPF_test")
+        with (
+            patch("nte_history_exporter.live_capture.backends.sys.platform", "win32"),
+            patch(
+                "nte_history_exporter.live_capture.backends.open_libpcap_capture",
+                return_value=capture,
+            ),
+            patch("nte_history_exporter.live_capture.backends.RawSocketCapture") as raw_capture,
+        ):
+            selected = open_capture_backend("192.0.2.1")
+
+        self.assertIs(selected, capture)
+        self.assertEqual(selected.name, "npcap")
+        self.assertEqual(selected.fallback_reason, "")
+        raw_capture.assert_not_called()
+
+    def test_windows_auto_falls_back_to_raw_socket_without_npcap(self):
+        fallback = Mock()
+        with (
+            patch("nte_history_exporter.live_capture.backends.sys.platform", "win32"),
+            patch(
+                "nte_history_exporter.live_capture.backends.open_libpcap_capture",
+                side_effect=LibpcapUnavailable("Npcap could not be loaded"),
+            ),
+            patch(
+                "nte_history_exporter.live_capture.backends.RawSocketCapture",
+                return_value=fallback,
+            ) as raw_capture,
+        ):
+            selected = open_capture_backend("192.0.2.1")
+
+        self.assertIs(selected, fallback)
+        raw_capture.assert_called_once_with(
+            "192.0.2.1",
+            fallback_reason="Npcap could not be loaded",
+        )
+
+    def test_explicit_libpcap_does_not_fall_back(self):
+        with (
+            patch("nte_history_exporter.live_capture.backends.sys.platform", "win32"),
+            patch(
+                "nte_history_exporter.live_capture.backends.open_libpcap_capture",
+                side_effect=LibpcapUnavailable("Npcap could not be loaded"),
+            ),
+            patch("nte_history_exporter.live_capture.backends.RawSocketCapture") as raw_capture,
+            self.assertRaises(LibpcapUnavailable),
+        ):
+            open_capture_backend("192.0.2.1", "libpcap")
+
+        raw_capture.assert_not_called()
+
+    def test_libpcap_link_layers_extract_ipv4_packets(self):
+        ip_packet = bytes.fromhex("4500001c0000000040110000c0000201c6336402") + bytes(8)
+        ethernet = bytes(12) + bytes.fromhex("0800") + ip_packet
+        loop = (2).to_bytes(4, sys.byteorder) + ip_packet
+        linux_sll = bytes(14) + bytes.fromhex("0800") + ip_packet
+        linux_sll2 = bytes.fromhex("0800") + bytes(18) + ip_packet
+
+        self.assertEqual(_extract_ipv4_frame(ethernet, DLT_EN10MB), ip_packet)
+        self.assertEqual(_extract_ipv4_frame(ip_packet, DLT_RAW), ip_packet)
+        self.assertEqual(_extract_ipv4_frame(loop, DLT_LOOP), ip_packet)
+        self.assertEqual(_extract_ipv4_frame(linux_sll, DLT_LINUX_SLL), ip_packet)
+        self.assertEqual(_extract_ipv4_frame(linux_sll2, DLT_LINUX_SLL2), ip_packet)
+
     def test_pool_mapping_json_files_have_uniform_shape(self):
         required_top_level = {"pool_key", "game", "system", "banner", "request", "response"}
         for pool_key, mapping in load_pool_mappings().items():
@@ -280,6 +358,25 @@ class BoundaryExportTests(unittest.TestCase):
         request[40:44] = (8).to_bytes(4, "little")
         self.assertEqual(history_request_kind(bytes(request)), "limited_character")
 
+    def test_monopoly_request_allows_coalesced_trailing_payload(self):
+        request = bytearray(45)
+        request[31:35] = (25 * 4).to_bytes(4, "little")
+        request[35:39] = (4220).to_bytes(4, "little")
+        request[40:44] = (4).to_bytes(4, "little")
+        coalesced = bytes(request) + bytes.fromhex(
+            "007c669610062038461bc40100000872a34b93821a0219aa933b0a6b2ba34a6b"
+        )
+
+        self.assertEqual(history_request_kind(coalesced), "permanent")
+
+    def test_arc_request_allows_coalesced_trailing_payload(self):
+        request = bytearray(34)
+        request[24:28] = (2060).to_bytes(4, "little")
+        request[29:33] = (7 * 2).to_bytes(4, "little")
+
+        self.assertTrue(is_arc_history_request(bytes(request) + bytes(32)))
+        self.assertEqual(arc_request_page(bytes(request) + bytes(32)), 7)
+
         response = bytearray(220)
         response[0x50:0x54] = (4).to_bytes(4, "little")
         response[0x54:0x58] = (20).to_bytes(4, "little")
@@ -329,6 +426,51 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded["reward_id"], "Dice_ticket_01")
         self.assertEqual(decoded["quantity"], 30)
         self.assertEqual(make_uid(decoded, int(reference["timestamp_group_ordinal"])), "7d035ec098f856f81b403ea538810145")
+
+    def test_batched_monopoly_response_normalizes_embedded_page_header(self):
+        page_7 = [load_v7_row("limited_all_04_v7.csv", row) for row in range(31, 36)]
+        page_8 = [load_v7_row("limited_all_04_v7.csv", row) for row in range(36, 41)]
+        embedded_header = bytes.fromhex(
+            "100126675671c6e0ecfcb769070000000c08000000100000003e0800000004000000"
+            "486c0000001835bdb9bdc1bdb1e531bdd1d195c9e549958dbdc9911185d18501"
+        )
+        response = (
+            bytes(0x50)
+            + b"".join(bytes.fromhex(row["record_hex"]) for row in page_7)
+            + embedded_header
+            + b"".join(bytes.fromhex(row["record_hex"]) for row in page_8)
+        )
+
+        decoded = decode_response_records(response)
+
+        self.assertEqual(len(decoded), 10)
+        self.assertEqual(decoded[5]["reward_id"], page_8[0]["reward_id"])
+        self.assertEqual(decoded[5]["dice"], 5)
+        self.assertEqual(decoded[5]["result_type"], "dice")
+        self.assertEqual(decoded[5]["record_hex"], page_8[0]["record_hex"])
+
+    def test_monopoly_response_parser_realigns_bit_packed_payload(self):
+        reference_rows = [
+            load_v7_row("limited_all_04_v7.csv", row)
+            for row in range(51, 61)
+        ]
+        response = bytes(0x50) + b"".join(
+            bytes.fromhex(row["record_hex"]) for row in reference_rows
+        )
+        packed = bytearray()
+        carry = 0b10101
+        for byte in response:
+            packed.append(carry | ((byte << 5) & 0xFF))
+            carry = byte >> 3
+        packed.append(carry)
+
+        decoded = decode_response_records(bytes(packed))
+
+        self.assertEqual(len(decoded), 10)
+        self.assertEqual(
+            [row["record_hex"] for row in decoded],
+            [row["record_hex"] for row in reference_rows],
+        )
 
     def test_page_gap_warning_reports_ignored_pages(self):
         pairs = [(p, p * 2, 0, 0, 0, 0, b"", "permanent") for p in (1, 2, 3, 5)]
@@ -484,7 +626,9 @@ class BoundaryExportTests(unittest.TestCase):
 
         response = bytearray(220)
         response[0x50:0x50 + len(MARKER)] = MARKER
-        response[0x50 + len(MARKER):0x50 + len(MARKER) + 8] = (1).to_bytes(8, "little")
+        response[0x50 + len(MARKER):0x50 + len(MARKER) + 8] = (
+            2556647947780680000
+        ).to_bytes(8, "little")
 
         self.assertFalse(
             session.process_packet(
@@ -512,6 +656,141 @@ class BoundaryExportTests(unittest.TestCase):
         )
         self.assertEqual(len(session.pairs), 1)
         self.assertEqual(session.last_page_seen, 1)
+
+    def test_live_session_pairs_pipelined_and_batched_pages(self):
+        session = LiveHistorySession("192.168.0.10")
+
+        def request_packet(page, timestamp):
+            request = bytearray(45)
+            request[31:35] = (page * 4).to_bytes(4, "little")
+            request[35:39] = (4220).to_bytes(4, "little")
+            request[40:44] = (4).to_bytes(4, "little")
+            return UdpPacket(
+                timestamp=timestamp,
+                src_ip="192.168.0.10",
+                dst_ip="203.0.113.5",
+                src_port=50000,
+                dst_port=40000,
+                payload=bytes(request),
+            )
+
+        timestamp = (2556647947780680000).to_bytes(8, "little")
+
+        def response_packet(record_count, packet_timestamp):
+            response = bytearray(0x50)
+            for _ in range(record_count):
+                response += bytes(4) + MARKER + timestamp
+            return UdpPacket(
+                timestamp=packet_timestamp,
+                src_ip="203.0.113.5",
+                dst_ip="192.168.0.10",
+                src_port=40000,
+                dst_port=50000,
+                payload=bytes(response),
+            )
+
+        for page in range(1, 9):
+            session.process_packet(request_packet(page, 1.0 + page / 10))
+
+        self.assertTrue(session.process_packet(response_packet(10, 2.0)))
+        self.assertEqual([pair[0] for pair in session.pairs], [1, 2])
+        self.assertEqual([pair[8:10] for pair in session.pairs], [(0, 5), (5, 5)])
+
+        self.assertTrue(session.process_packet(response_packet(10, 2.1)))
+        self.assertEqual([pair[0] for pair in session.pairs], [1, 2, 3, 4])
+        self.assertEqual(session.missing_pages("permanent"), [])
+        rows = session.build_rows("permanent")
+        self.assertEqual(len(rows), 20)
+        self.assertEqual(
+            {page: sum(row["page"] == page for row in rows) for page in range(1, 5)},
+            {1: 5, 2: 5, 3: 5, 4: 5},
+        )
+
+        session.process_packet(request_packet(9, 2.2))
+        self.assertTrue(session.process_packet(response_packet(4, 2.3)))
+        self.assertEqual(session.pairs[-1][0], 9)
+        self.assertEqual(session.pairs[-1][8:10], (0, 4))
+
+    def test_live_session_new_page_one_starts_clean_recovery_cycle(self):
+        session = LiveHistorySession("192.168.0.10")
+
+        def request_packet(page, timestamp):
+            request = bytearray(45)
+            request[31:35] = (page * 4).to_bytes(4, "little")
+            request[35:39] = (4220).to_bytes(4, "little")
+            request[40:44] = (4).to_bytes(4, "little")
+            return UdpPacket(
+                timestamp=timestamp,
+                src_ip="192.168.0.10",
+                dst_ip="203.0.113.5",
+                src_port=50000,
+                dst_port=40000,
+                payload=bytes(request),
+            )
+
+        session.process_packet(request_packet(7, 1.0))
+        session.process_packet(request_packet(8, 1.1))
+        session.process_packet(request_packet(1, 2.0))
+
+        self.assertEqual([request.page for request in session.pending], [1])
+        self.assertEqual(
+            session.missing_page_reason("permanent", 7),
+            "request captured; no matching response page was captured",
+        )
+
+        timestamp = (2556647947780680000).to_bytes(8, "little")
+        response = bytearray(0x50)
+        for _ in range(5):
+            response += bytes(4) + MARKER + timestamp
+        self.assertTrue(
+            session.process_packet(
+                UdpPacket(
+                    timestamp=2.1,
+                    src_ip="203.0.113.5",
+                    dst_ip="192.168.0.10",
+                    src_port=40000,
+                    dst_port=50000,
+                    payload=bytes(response),
+                )
+            )
+        )
+        self.assertEqual(session.pairs[-1][0], 1)
+        self.assertEqual(session.missing_pages("permanent"), [])
+
+    def test_live_session_reports_unrecognized_response_candidate(self):
+        session = LiveHistorySession("192.168.0.10")
+
+        def request_packet(page, timestamp):
+            request = bytearray(45)
+            request[31:35] = (page * 4).to_bytes(4, "little")
+            request[35:39] = (4220).to_bytes(4, "little")
+            request[40:44] = (4).to_bytes(4, "little")
+            return UdpPacket(
+                timestamp=timestamp,
+                src_ip="192.168.0.10",
+                dst_ip="203.0.113.5",
+                src_port=50000,
+                dst_port=40000,
+                payload=bytes(request),
+            )
+
+        session.process_packet(request_packet(1, 1.0))
+        session.process_packet(
+            UdpPacket(
+                timestamp=1.1,
+                src_ip="203.0.113.5",
+                dst_ip="192.168.0.10",
+                src_port=40000,
+                dst_port=50000,
+                payload=bytes(220),
+            )
+        )
+        session.process_packet(request_packet(2, 1.2))
+
+        self.assertEqual(
+            session.missing_page_reason("permanent", 1),
+            "1 matching inbound UDP packet(s) captured but not recognized as history response (lengths: 220)",
+        )
 
     def test_live_session_ignores_non_history_udp_packets(self):
         session = LiveHistorySession("192.168.0.10")

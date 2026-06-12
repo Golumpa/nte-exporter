@@ -13,10 +13,10 @@ from nte_history_exporter.decoder.arc import (
 )
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.protocol import (
+    decode_response_records,
     history_request_kind,
     is_history_request,
     request_page,
-    response_contains_history_marker,
 )
 from nte_history_exporter.decoder.run import build_rows_from_pairs
 
@@ -42,6 +42,8 @@ class PendingRequest:
     dst_ip: str
     src_port: int
     dst_port: int
+    response_candidates: int = 0
+    response_candidate_lengths: tuple[int, ...] = ()
 
 
 class LiveHistorySession:
@@ -52,6 +54,42 @@ class LiveHistorySession:
         self.packet_count = 0
         self.last_match_time: float | None = None
         self.last_page_seen: int | None = None
+        self.last_capture_was_replacement = False
+        self.requested_pages: dict[str, set[int]] = {}
+        self.unanswered_pages: dict[str, dict[int, str]] = {}
+
+    def _mark_unanswered(self, request: PendingRequest) -> None:
+        if request.response_candidates:
+            lengths = ", ".join(str(length) for length in request.response_candidate_lengths)
+            reason = (
+                f"{request.response_candidates} matching inbound UDP packet(s) captured "
+                f"but not recognized as history response (lengths: {lengths})"
+            )
+        else:
+            reason = "request captured; no matching response page was captured"
+        self.unanswered_pages.setdefault(request.kind, {})[request.page] = reason
+
+    def _queue_request(self, request: PendingRequest) -> None:
+        # The game may pipeline several page requests before responses arrive,
+        # and one response can contain multiple five-record pages. Keep that
+        # queue intact; only replace an earlier duplicate request for the same
+        # page, such as a recovery pass after reopening the history board.
+        retained = deque()
+        for pending in self.pending:
+            same_stream = (
+                pending.src_ip == request.src_ip
+                and pending.dst_ip == request.dst_ip
+                and pending.src_port == request.src_port
+                and pending.dst_port == request.dst_port
+                and pending.kind == request.kind
+            )
+            if same_stream and (request.page == 1 or pending.page == request.page):
+                self._mark_unanswered(pending)
+            else:
+                retained.append(pending)
+        self.pending = retained
+        self.requested_pages.setdefault(request.kind, set()).add(request.page)
+        self.pending.append(request)
 
     def process_packet(self, packet: UdpPacket) -> bool:
         self.packet_count += 1
@@ -69,7 +107,7 @@ class LiveHistorySession:
                 src_port=packet.src_port,
                 dst_port=packet.dst_port,
             )
-            self.pending.append(req)
+            self._queue_request(req)
             self.last_page_seen = req.page
             return False
 
@@ -86,47 +124,82 @@ class LiveHistorySession:
                 src_port=packet.src_port,
                 dst_port=packet.dst_port,
             )
-            self.pending.append(req)
+            self._queue_request(req)
             self.last_page_seen = req.page
             return False
 
         if packet.dst_ip != self.local_ip or len(packet.payload) < 100:
             return False
 
-        is_monopoly_response = response_contains_history_marker(packet.payload)
-        is_arc_response = bool(parse_arc_response(packet.payload))
-        if not is_monopoly_response and not is_arc_response:
-            return False
-
-        for req in self.pending:
-            if req.kind == "arc_miracle_box" and not is_arc_response:
-                continue
-            if req.kind != "arc_miracle_box" and not is_monopoly_response:
-                continue
+        connection_candidates = [
+            req
+            for req in self.pending
             if (
                 packet.src_ip == req.dst_ip
                 and packet.dst_ip == req.src_ip
                 and packet.src_port == req.dst_port
                 and packet.dst_port == req.src_port
-            ):
-                self.pending.remove(req)
-                self.pairs.append(
-                    (
-                        req.page,
-                        req.offset,
-                        req.request_msg,
-                        req.request_time,
-                        self.packet_count,
-                        packet.timestamp,
-                        packet.payload,
-                        req.kind,
-                    )
-                )
-                self.last_match_time = packet.timestamp
-                self.last_page_seen = req.page
-                return True
+            )
+        ]
+        if not connection_candidates:
+            return False
 
-        return False
+        monopoly_records = decode_response_records(packet.payload)
+        arc_records = parse_arc_response(packet.payload) if not monopoly_records else []
+        if monopoly_records:
+            candidates = [req for req in connection_candidates if req.kind != "arc_miracle_box"]
+            records = monopoly_records
+        elif arc_records:
+            candidates = [req for req in connection_candidates if req.kind == "arc_miracle_box"]
+            records = arc_records
+        else:
+            candidates = connection_candidates
+            records = []
+
+        if not records or not candidates:
+            for req in candidates:
+                req.response_candidates += 1
+                req.response_candidate_lengths = (
+                    *req.response_candidate_lengths[-4:],
+                    len(packet.payload),
+                )
+            return False
+
+        page_count = max(1, (len(records) + 4) // 5)
+        if len(records) < 5:
+            selected = [candidates[-1]]
+        else:
+            selected = candidates[:page_count]
+
+        for page_slice, req in enumerate(selected):
+            self.pending.remove(req)
+            self.unanswered_pages.setdefault(req.kind, {}).pop(req.page, None)
+            slice_start = page_slice * 5
+            slice_count = min(5, len(records) - slice_start)
+            if slice_count <= 0:
+                break
+            self.last_capture_was_replacement = any(
+                pair[0] == req.page and (pair[7] if len(pair) > 7 else "permanent") == req.kind
+                for pair in self.pairs
+            )
+            self.pairs.append(
+                (
+                    req.page,
+                    req.offset,
+                    req.request_msg,
+                    req.request_time,
+                    self.packet_count,
+                    packet.timestamp,
+                    packet.payload,
+                    req.kind,
+                    slice_start,
+                    slice_count,
+                )
+            )
+            self.last_match_time = packet.timestamp
+            self.last_page_seen = req.page
+
+        return bool(selected)
 
     def kinds_seen(self) -> list[str]:
         seen = []
@@ -138,6 +211,30 @@ class LiveHistorySession:
 
     def pairs_for_kind(self, kind: str) -> list[tuple]:
         return [pair for pair in self.pairs if (pair[7] if len(pair) > 7 else "permanent") == kind]
+
+    def missing_pages(self, kind: str) -> list[int]:
+        pages = {pair[0] for pair in self.pairs_for_kind(kind)}
+        if not pages:
+            return []
+        return [page for page in range(1, max(pages) + 1) if page not in pages]
+
+    def missing_page_reason(self, kind: str, page: int) -> str:
+        unanswered = self.unanswered_pages.get(kind, {})
+        if page in unanswered:
+            return unanswered[page]
+        pending = next(
+            (request for request in self.pending if request.kind == kind and request.page == page),
+            None,
+        )
+        if pending and pending.response_candidates:
+            lengths = ", ".join(str(length) for length in pending.response_candidate_lengths)
+            return (
+                f"{pending.response_candidates} matching inbound UDP packet(s) captured "
+                f"but not recognized as history response (lengths: {lengths})"
+            )
+        if page in self.requested_pages.get(kind, set()):
+            return "request captured; no matching response page was captured"
+        return "request was not captured"
 
     def build_rows(self, kind: str | None = None) -> list[dict[str, Any]]:
         if kind == "arc_miracle_box":

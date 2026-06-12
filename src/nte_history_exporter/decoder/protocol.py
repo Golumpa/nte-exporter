@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import struct
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 from nte_history_exporter.constants import (
     DOTNET_UNIX_EPOCH_SECONDS,
@@ -73,7 +73,7 @@ def decode_history_timestamp(raw8: bytes) -> tuple[int, float, str]:
 
 
 def history_request_kind(content: bytes) -> str:
-    if len(content) != HISTORY_REQUEST_LENGTH or struct.unpack_from("<I", content, 35)[0] != HISTORY_REQUEST_BANNER:
+    if len(content) < HISTORY_REQUEST_LENGTH or struct.unpack_from("<I", content, 35)[0] != HISTORY_REQUEST_BANNER:
         return ""
     selector = struct.unpack_from("<I", content, 40)[0]
     if selector == PERMANENT_SELECTOR:
@@ -92,7 +92,22 @@ def request_page(content: bytes) -> int:
 
 
 def response_contains_history_marker(content: bytes) -> bool:
-    return any(marker in content for marker in MARKERS)
+    return any(
+        marker in candidate
+        for candidate in iter_history_response_alignments(content)
+        for marker in MARKERS
+    )
+
+
+def iter_history_response_alignments(content: bytes) -> Iterator[bytes]:
+    yield content
+    for bit_offset in range(1, 8):
+        mask = (1 << bit_offset) - 1
+        yield bytes(
+            (content[index] >> bit_offset)
+            | ((content[index + 1] & mask) << (8 - bit_offset))
+            for index in range(len(content) - 1)
+        )
 
 
 def extract_key(chunk_without_marker: bytes) -> str:
@@ -161,7 +176,7 @@ def guess_quantity(chunk_hex: str, reward_id: str, result_type: str | None = Non
     return None
 
 
-def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
+def _decode_aligned_response_records(response_content: bytes) -> list[dict[str, Any]]:
     marker = b""
     marker_offsets: list[int] = []
     for candidate_marker in MARKERS:
@@ -176,9 +191,41 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     prev = 0x50
     for row_index, marker_offset in enumerate(marker_offsets, start=1):
+        record_start = prev
         chunk = response_content[prev:marker_offset]
         full_record = response_content[prev : marker_offset + len(marker) + 8]
         dice, dice_raw, dice_offset = extract_dice(chunk)
+        if dice is None and len(chunk) > 32:
+            embedded_candidates = []
+            original_key = extract_key(chunk)
+            original_key_bytes = bytes.fromhex(original_key) if original_key else b""
+            for trim in range(1, min(96, len(chunk))):
+                candidate = chunk[trim:]
+                candidate_dice, candidate_raw, candidate_offset = extract_dice(candidate)
+                if (
+                    candidate_dice is not None
+                    and candidate_offset in (0, 5)
+                    and extract_key(candidate) == original_key
+                ):
+                    key_count = candidate.count(original_key_bytes) if original_key_bytes else 0
+                    key_position = candidate.find(original_key_bytes) if original_key_bytes else len(candidate)
+                    embedded_candidates.append(
+                        (
+                            -key_count,
+                            candidate_offset != 5,
+                            key_position,
+                            -trim,
+                            trim,
+                            candidate,
+                            candidate_dice,
+                            candidate_raw,
+                            candidate_offset,
+                        )
+                    )
+            if embedded_candidates:
+                _, _, _, _, trim, chunk, dice, dice_raw, dice_offset = min(embedded_candidates)
+                record_start = prev + trim
+                full_record = response_content[prev + trim : marker_offset + len(marker) + 8]
         result_type, result_source_raw = classify_result_type(chunk, dice, dice_offset)
         if result_type == "points_gift":
             dice = 0
@@ -195,7 +242,7 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
         rows.append(
             {
                 "row": row_index,
-                "record_start": prev,
+                "record_start": record_start,
                 "record_end": marker_offset + len(marker) + 8,
                 "record_len": len(full_record),
                 "dice": dice,
@@ -223,3 +270,16 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
         )
         prev = marker_offset + len(marker) + 8
     return rows
+
+
+def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
+    for candidate in iter_history_response_alignments(response_content):
+        if not any(marker in candidate for marker in MARKERS):
+            continue
+        try:
+            rows = _decode_aligned_response_records(candidate)
+        except (OSError, OverflowError, ValueError):
+            continue
+        if rows:
+            return rows
+    return []

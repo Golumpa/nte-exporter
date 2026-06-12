@@ -10,7 +10,7 @@ The sanitized JSON export uses:
   "source": "packet_capture",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "banner": {
     "id": "Lottery_Permanent",

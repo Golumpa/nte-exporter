@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from nte_history_exporter.live_capture.session import UdpPacket
 
+RECEIVE_BUFFER_SIZE = 4 * 1024 * 1024
+
 
 @dataclass
 class ParsedIpUdpPacket:
@@ -63,6 +65,7 @@ def parse_ipv4_udp_packet(data: bytes) -> ParsedIpUdpPacket | None:
 def open_raw_udp_socket(local_ip: str) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
     sock.bind((local_ip, 0))
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, RECEIVE_BUFFER_SIZE)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
     sock.settimeout(0.5)
