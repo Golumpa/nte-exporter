@@ -356,6 +356,16 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded[0]["reward_type"], "arc")
         self.assertEqual(decoded[0]["reward_key_hex"], reference_rows[0]["arc_key_hex"])
 
+    def test_arc_response_parser_rejects_invalid_timestamp_noise(self):
+        response = bytearray(0x4C)
+        response += (10).to_bytes(4, "little")
+        response += bytes.fromhex("ccdee4d6be")
+        response += (8).to_bytes(4, "little")
+        response += b"garb"
+        response += (0xFFFFFFFFFFFFFFFF).to_bytes(8, "little")
+
+        self.assertEqual(parse_arc_response(bytes(response)), [])
+
     def test_arc_partial_timestamp_group_is_exported_without_warning(self):
         rows = load_arc_csv("arc_pages_1_to_5_v2.csv")
         pairs = []

@@ -50,9 +50,14 @@ def decode_arc_key(raw: bytes) -> str | None:
 
 
 def decode_arc_timestamp(raw8: bytes) -> tuple[int, float, str]:
+    if len(raw8) != 8:
+        raise ValueError("arc timestamps must be exactly 8 bytes")
     ticks = struct.unpack("<Q", raw8)[0]
     unix_seconds = ticks / ARC_TIMESTAMP_TICKS_PER_SECOND - DOTNET_UNIX_EPOCH_SECONDS
-    decoded = datetime.fromtimestamp(unix_seconds, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        decoded = datetime.fromtimestamp(unix_seconds, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    except (OverflowError, OSError, ValueError) as exc:
+        raise ValueError("arc timestamp is out of range") from exc
     return ticks, unix_seconds, decoded
 
 
@@ -85,7 +90,10 @@ def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
         pos += 8
         arc_id = decode_arc_key(name_raw) or name_raw.hex()
         meta = ARC_META.get(arc_id, {})
-        ticks, unix_seconds, timestamp_decoded = decode_arc_timestamp(timestamp_raw)
+        try:
+            ticks, unix_seconds, timestamp_decoded = decode_arc_timestamp(timestamp_raw)
+        except ValueError:
+            return []
         records.append(
             {
                 "record_start": start,
