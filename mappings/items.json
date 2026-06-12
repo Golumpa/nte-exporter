@@ -1,8 +1,15 @@
 {
-  "DiceNormal": {"type": "item", "name": "Fabricated Dice", "rank": null},
-  "Dice_ticket_01": {"type": "item", "name": "Warp Piece", "rank": null},
-  "Dice_ticket_02": {"type": "item", "name": "Lost Piece", "rank": null},
-  "Dicelimite": {"type": "item", "name": "Solid Dice", "rank": null},
-  "Fashion_vehicle_1010_V008": {"type": "cosmetic", "name": "Fashion Vehicle Skin 1010 V008", "rank": null},
-  "Fashion_Glide_1010": {"type": "cosmetic", "name": "Fashion Glider 1010", "rank": null}
+  "DiceNormal": {"type": "item", "name": "Fabricated Dice", "rank": "S"},
+  "Dice_ticket_01": {"type": "item", "name": "Warp Piece", "rank": "S"},
+  "Dice_ticket_02": {"type": "item", "name": "Lost Piece", "rank": "A"},
+  "Dicelimite": {"type": "item", "name": "Solid Dice", "rank": "S"},
+  "Fashion_Glide_1010": {"type": "cosmetic", "name": "Underboss-of-the-Underboss", "rank": "A"},
+  "Fashion_vehicle_1010_V008": {"type": "cosmetic", "name": "Tiger Incoming! - Livery", "rank": "S"},
+  "Fashion_1010_2": {"type": "cosmetic", "name": "Phoenix Kick", "rank": "S"},
+  "Fashion_Glide_1052": {"type": "cosmetic", "name": "Orchid Breeze", "rank": "A"},
+  "Fashion_vehicle_1052_V024": {"type": "cosmetic", "name": "Autumn Haze - Livery", "rank": "S"},
+  "Fashion_1052_1": {"type": "cosmetic", "name": "Priceless Orchid", "rank": "S"},
+  "Fashion_Glide_1004": {"type": "cosmetic", "name": "Tomato Duo", "rank": "A"},
+  "Fashion_vehicle_1004_V021": {"type": "cosmetic", "name": "Tomato Cruise - Livery", "rank": "S"},
+  "Fashion_1004_1": {"type": "cosmetic", "name": "Gilded Rhapsody", "rank": "S"}
 }
