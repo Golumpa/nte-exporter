@@ -146,7 +146,7 @@ class BoundaryExportTests(unittest.TestCase):
             patch("nte_history_exporter.live_capture.libpcap.sys.platform", "win32"),
             patch("nte_history_exporter.live_capture.libpcap._windows_npcap_directory", return_value=system_dir),
             patch("nte_history_exporter.live_capture.libpcap.Path.is_dir", return_value=True),
-            patch("nte_history_exporter.live_capture.libpcap.os.add_dll_directory", return_value=Mock()),
+            patch("nte_history_exporter.live_capture.libpcap.os.add_dll_directory", return_value=Mock(), create=True),
             patch(
                 "nte_history_exporter.live_capture.libpcap.ctypes.CDLL",
                 side_effect=[OSError("system missing"), loaded],
