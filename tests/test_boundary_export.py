@@ -38,6 +38,7 @@ from nte_history_exporter.live_capture.libpcap import (
     DLT_LOOP,
     DLT_RAW,
     _extract_ipv4_frame,
+    _load_library,
     LibpcapUnavailable,
 )
 from nte_history_exporter.live_capture.windows_raw import parse_ipv4_packet
@@ -137,6 +138,29 @@ class BoundaryExportTests(unittest.TestCase):
             open_capture_backend("192.0.2.1", "libpcap")
 
         raw_capture.assert_not_called()
+
+    def test_windows_libpcap_load_prefers_system_then_path(self):
+        system_dir = Path("C:/Windows/System32/Npcap")
+        loaded = Mock()
+        with (
+            patch("nte_history_exporter.live_capture.libpcap.sys.platform", "win32"),
+            patch("nte_history_exporter.live_capture.libpcap._windows_npcap_directory", return_value=system_dir),
+            patch("nte_history_exporter.live_capture.libpcap.Path.is_dir", return_value=True),
+            patch("nte_history_exporter.live_capture.libpcap.os.add_dll_directory", return_value=Mock()),
+            patch(
+                "nte_history_exporter.live_capture.libpcap.ctypes.CDLL",
+                side_effect=[OSError("system missing"), loaded],
+            ) as cdll,
+        ):
+            self.assertIs(_load_library(), loaded)
+
+        self.assertEqual(
+            [call.args[0] for call in cdll.call_args_list],
+            [
+                str(system_dir / "wpcap.dll"),
+                "wpcap.dll",
+            ],
+        )
 
     def test_libpcap_link_layers_extract_ipv4_packets(self):
         ip_packet = bytes.fromhex("4500001c0000000040110000c0000201c6336402") + bytes(8)

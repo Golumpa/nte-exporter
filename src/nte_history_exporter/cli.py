@@ -24,7 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--capture-backend",
         choices=["auto", "libpcap", "raw"],
         default="auto",
-        help="live capture backend; auto prefers Npcap/libpcap and falls back to raw sockets on Windows",
+        help=(
+            "live capture backend; auto prefers Npcap/libpcap and falls back to raw sockets on Windows "
+            "(default: %(default)s)"
+        ),
     )
     parser.add_argument("--copy-clipboard", action="store_true", help="copy a single live export to clipboard")
     parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")

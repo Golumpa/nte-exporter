@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Get Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]"
+
+      - name: Test
+        run: python -m unittest discover -s tests
+
+      - name: Build
+        run: python -m PyInstaller --clean --noconfirm "packaging/NTE History Exporter.spec"
+
+      - name: Smoke Test
+        run: .\dist\nte-history-exporter.exe --help
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/nte-history-exporter.exe
+
+  build-linux:
+    name: Build Linux
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Get Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]"
+
+      - name: Test
+        run: python -m unittest discover -s tests
+
+      - name: Build
+        run: python -m PyInstaller --clean --noconfirm "packaging/NTE History Exporter.spec"
+
+      - name: Smoke Test
+        run: ./dist/nte-history-exporter --help
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/nte-history-exporter
+
+  build-macos:
+    name: Build Macos
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install libpcap
+        run: brew update && brew install libpcap
+
+      - name: Get Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]"
+
+      - name: Test
+        run: python -m unittest discover -s tests
+
+      - name: Build
+        run: python -m PyInstaller --clean --noconfirm "packaging/NTE History Exporter.spec"
+
+      - name: Smoke Test
+        run: ./dist/nte-history-exporter --help
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/nte-history-exporter
+
+  release:
+    name: Release
+    if: github.ref == 'refs/heads/main'
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Get package version
+        id: package-version
+        run: |
+          version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Rename
+        run: |
+          version="${{ steps.package-version.outputs.version }}"
+          cp windows/nte-history-exporter.exe nte-history-exporter.exe
+          zip nte-history-exporter-v${version}-x86_64-pc-windows-msvc.zip nte-history-exporter.exe
+          cp linux/nte-history-exporter nte-history-exporter
+          chmod +x nte-history-exporter
+          cp nte-history-exporter nte-history-exporter-linux
+          zip nte-history-exporter-v${version}-x86_64-unknown-linux-gnu.zip nte-history-exporter
+          cp macos/nte-history-exporter nte-history-exporter
+          chmod +x nte-history-exporter
+          cp nte-history-exporter nte-history-exporter-macos
+          zip nte-history-exporter-v${version}-x86_64-apple-darwin.zip nte-history-exporter
+
+      - name: Release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: v${{ steps.package-version.outputs.version }}
+          prerelease: false
+          title: v${{ steps.package-version.outputs.version }} Release
+          files: |
+            nte-history-exporter.exe
+            nte-history-exporter-linux
+            nte-history-exporter-macos
+            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-pc-windows-msvc.zip
+            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-unknown-linux-gnu.zip
+            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-apple-darwin.zip

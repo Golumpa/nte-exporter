@@ -103,7 +103,8 @@ def _load_library() -> ctypes.CDLL:
         npcap_dir = _windows_npcap_directory()
         if npcap_dir.is_dir() and hasattr(os, "add_dll_directory"):
             dll_directory = os.add_dll_directory(str(npcap_dir))
-        candidates.extend([str(npcap_dir / "wpcap.dll"), "wpcap.dll"])
+        candidates.append(str(npcap_dir / "wpcap.dll"))
+        candidates.append("wpcap.dll")
     elif sys.platform == "darwin":
         candidates.extend(
             [
