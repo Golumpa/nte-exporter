@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -36,7 +36,7 @@ jobs:
         run: .\dist\nte-history-exporter.exe --help
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows
           path: dist/nte-history-exporter.exe
@@ -48,13 +48,13 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install libpcap
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
 
       - name: Get Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -73,7 +73,7 @@ jobs:
         run: ./dist/nte-history-exporter --help
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux
           path: dist/nte-history-exporter
@@ -85,13 +85,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Install libpcap
-        run: brew update && brew install libpcap
+        uses: actions/checkout@v5
 
       - name: Get Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -110,7 +107,7 @@ jobs:
         run: ./dist/nte-history-exporter --help
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos
           path: dist/nte-history-exporter
@@ -123,7 +120,7 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get package version
         id: package-version
@@ -132,7 +129,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
 
       - name: Rename
         run: |
@@ -149,16 +146,22 @@ jobs:
           zip nte-history-exporter-v${version}-x86_64-apple-darwin.zip nte-history-exporter
 
       - name: Release
-        uses: marvinpinto/action-automatic-releases@latest
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          automatic_release_tag: v${{ steps.package-version.outputs.version }}
-          prerelease: false
-          title: v${{ steps.package-version.outputs.version }} Release
-          files: |
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.package-version.outputs.version }}"
+          tag="v${version}"
+          files=(
             nte-history-exporter.exe
             nte-history-exporter-linux
             nte-history-exporter-macos
-            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-pc-windows-msvc.zip
-            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-unknown-linux-gnu.zip
-            nte-history-exporter-v${{ steps.package-version.outputs.version }}-x86_64-apple-darwin.zip
+            nte-history-exporter-v${version}-x86_64-pc-windows-msvc.zip
+            nte-history-exporter-v${version}-x86_64-unknown-linux-gnu.zip
+            nte-history-exporter-v${version}-x86_64-apple-darwin.zip
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes "Release ${tag}"
+          fi
