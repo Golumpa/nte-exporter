@@ -50,7 +50,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except (LibpcapUnavailable, PermissionError) as exc:
             console.print_problem(str(exc))
-            console.print_note("Install/enable Npcap or libpcap and run with packet-capture permissions.")
+            console.print_note(
+                "Install/enable Npcap or libpcap. If using raw capture on Windows, right-click and run as Administrator; on Linux/macOS, try sudo."
+            )
             return 1
 
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)

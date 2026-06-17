@@ -14,27 +14,25 @@ function ConvertTo-QuotedArgument {
 function Test-RequiresAdministrator {
     param([string[]]$Arguments)
 
-    if ($Arguments.Count -eq 0) {
-        return $true
-    }
     if ($Arguments -contains '--help' -or $Arguments -contains '-h') {
         return $false
     }
-    if ($Arguments -contains '--live') {
-        return $true
-    }
 
-    foreach ($arg in $Arguments) {
-        if (-not $arg.StartsWith('-')) {
-            return $false
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $arg = $Arguments[$i]
+        if ($arg -eq '--capture-backend' -and $i + 1 -lt $Arguments.Count) {
+            return $Arguments[$i + 1] -eq 'raw'
+        }
+        if ($arg -eq '--capture-backend=raw') {
+            return $true
         }
     }
-    return $true
+    return $false
 }
 
 if ((Test-RequiresAdministrator -Arguments $args) -and -not (Test-IsAdministrator)) {
-    Write-Host 'Administrator permission is required for live packet capture.'
-    Write-Host 'Windows will show a UAC prompt so the exporter can listen to game network traffic.'
+    Write-Host 'Administrator permission may be required for the Windows raw capture backend.'
+    Write-Host 'Windows will show a UAC prompt so the exporter can use raw sockets.'
     Write-Host ''
     $answer = Read-Host 'Continue and request administrator access? (Y/N)'
     if ($answer -notin @('Y', 'y', 'Yes', 'yes')) {

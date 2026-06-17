@@ -11,7 +11,7 @@ The sanitized JSON export uses:
   "capture_source": "npcap",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.3"
+    "version": "0.1.4"
   },
   "banner": {
     "id": "Lottery_Permanent",

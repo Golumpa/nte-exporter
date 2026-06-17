@@ -29,13 +29,37 @@ The exporter decodes Permanent Board, Limited Character Board, and Arc Miracle B
 
 ## Requirements
 
-- Python 3.10 or newer.
-- Packet-capture permission: Administrator on Windows, or root/capture capabilities on Linux and macOS.
+- Python 3.10 or newer when running from source. Release binaries include the Python runtime.
+- Packet-capture permission. On Windows, Npcap can usually capture without running this tool as Administrator; the raw-socket fallback may need Administrator. On Linux and macOS, use root or capture capabilities as required by your system.
 - **Windows:** [Npcap](https://npcap.com/) is recommended. Install it normally; WinPcap API-compatible mode is not required. If Npcap is unavailable or cannot be initialized, `auto` falls back to the Windows built-in raw-socket backend.
 - **Linux:** install the system **libpcap** runtime if it is not already present. Package names commonly include `libpcap0.8` on Debian/Ubuntu and `libpcap` on Fedora, Arch, and similar distributions.
 - **macOS:** the system normally includes **libpcap**, so no separate Npcap installation is needed.
 
 Npcap is Windows-only and is not bundled with this project. Linux and macOS use libpcap, the cross-platform capture library on which Npcap is based.
+
+## Downloads
+
+Compiled command-line builds are published from GitHub Actions as release assets:
+
+- `nte-history-exporter.exe` for Windows
+- `nte-history-exporter-linux` for Linux
+- `nte-history-exporter-macos` for macOS
+- Versioned `.zip` archives for each platform
+
+The Windows executable is a single console app. Start it from a terminal:
+
+```powershell
+.\nte-history-exporter.exe
+```
+
+On Linux and macOS, make the downloaded binary executable before running it. Use `sudo` only when your system requires elevated capture permission:
+
+```bash
+chmod +x ./nte-history-exporter-linux
+sudo ./nte-history-exporter-linux
+```
+
+Use `nte-history-exporter-macos` in the same way on macOS. If your browser or OS blocks a downloaded macOS binary, allow it from the system security prompt before running it again.
 
 ## Usage
 
@@ -48,13 +72,21 @@ The default `auto` capture backend uses:
 
 Use `--capture-backend libpcap` to require Npcap/libpcap without fallback, or `--capture-backend raw` to require the Windows raw-socket backend.
 
-#### Windows (requires Administrator)
+#### Windows
+
+Downloaded executable:
 
 ```powershell
-.\run-exporter.ps1 --live
+.\nte-history-exporter.exe
 ```
 
-Or simply double-click **`run-exporter.cmd`** — it asks for confirmation before requesting Administrator privileges, and does nothing until you agree.
+From source:
+
+```powershell
+.\run-exporter.ps1
+```
+
+Or simply double-click **`run-exporter.cmd`**.
 
 > [!IMPORTANT]
 > For automatic user UID detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for your UID before saving if it cannot detect it automatically.
@@ -73,18 +105,33 @@ If a page response is missed, the exporter reports the missing page number while
 
 #### Linux/macOS
 
-Install the project and ensure the system libpcap runtime is available:
+Downloaded executable, using `sudo` when your system requires elevated capture permission:
+
+```bash
+chmod +x ./nte-history-exporter-linux
+sudo ./nte-history-exporter-linux
+```
+
+From source, install the project and ensure the system libpcap runtime is available:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
-sudo .venv/bin/nte-history-exporter --live
+sudo .venv/bin/nte-history-exporter
 ```
 
 macOS normally includes libpcap. On Linux, install the distribution's libpcap runtime package if it is not already present. Capture can also be granted through platform-specific capabilities instead of running the whole exporter with `sudo`.
 
 ### File replay
+
+Downloaded executable:
+
+```powershell
+.\nte-history-exporter.exe capture.flows
+```
+
+From source:
 
 ```powershell
 .\run-exporter.ps1 capture.flows

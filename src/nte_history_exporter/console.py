@@ -122,6 +122,7 @@ def print_capture_stats(received: int, dropped: int, interface_dropped: int) -> 
 def print_capture_fallback(reason: str) -> None:
     print(style("  ! Npcap unavailable; using Windows raw capture.", YELLOW))
     print(style(f"    {reason}", DIM))
+    print(style("    Raw capture may require running this terminal as Administrator.", DIM))
 
 
 def print_results_header() -> None:
