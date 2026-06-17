@@ -6,6 +6,7 @@ import sys
 from nte_history_exporter.constants import EXPORTER_VERSION, GAME_NAME
 
 WIDTH = 58
+REPOSITORY_URL = "https://github.com/Golumpa/nte-exporter"
 
 RESET = "\x1b[0m"
 BOLD = "\x1b[1m"
@@ -59,6 +60,9 @@ def print_banner() -> None:
     print(rule("="))
     print(style(f"  NTE History Exporter  v{EXPORTER_VERSION}", BOLD, CYAN))
     print(style(f"  {GAME_NAME} pull history -> tracker JSON", DIM))
+    print(style(f"  {REPOSITORY_URL}", DIM))
+    heart = "❤️" if (getattr(sys.stdout, "encoding", None) or "").lower().replace("-", "") == "utf8" else "<3"
+    print(style(f"  Created with {heart} by Golumpa", DIM))
     print(rule("="))
 
 

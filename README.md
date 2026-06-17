@@ -39,7 +39,7 @@ Npcap is Windows-only and is not bundled with this project. Linux and macOS use 
 
 ## Downloads
 
-Compiled command-line builds are published from GitHub Actions as release assets:
+Compiled command-line builds are published on the [GitHub Releases page](https://github.com/Golumpa/nte-exporter/releases):
 
 - `nte-history-exporter.exe` for Windows
 - `nte-history-exporter-linux` for Linux
