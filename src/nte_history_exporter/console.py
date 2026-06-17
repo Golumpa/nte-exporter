@@ -68,10 +68,10 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
     print(style(f"  Capture backend: {backend}{backend_detail}", DIM))
     print()
     print(style("  How to export your pull history", BOLD))
-    print("    1. This tool must be running BEFORE you press Start on")
-    print("       the game's main menu, or the game connection cannot")
-    print("       be captured. Already in game? Log out to the main")
-    print("       menu and enter again.")
+    print("    1. For automatic user UID detection, start this tool")
+    print("       before pressing Start on the game's main menu.")
+    print("       Already in game? You can still capture history;")
+    print("       the tool will ask for your UID if it cannot detect it.")
     print("    2. Open a supported history screen:")
     print(style("         Monopoly  >  Standard Board history", CYAN))
     print(style("         Monopoly  >  Limited Character Board history", CYAN))
@@ -151,3 +151,12 @@ def print_success(text: str) -> None:
 
 def print_problem(text: str) -> None:
     print(style(f"  {text}", YELLOW, BOLD))
+
+
+def prompt_user_uid() -> str | None:
+    print()
+    print_problem("User UID was not detected in this capture.")
+    print_note("Enter your NTE user UID so the export can be named and linked correctly.")
+    print_note("Leaving this blank may prevent import on some trackers.")
+    value = input("  User UID: ").strip()
+    return value or None

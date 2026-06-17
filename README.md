@@ -25,7 +25,7 @@ Prototype CLI exporter for **Neverness to Everness** pull history — decodes yo
 The exporter decodes Permanent Board, Limited Character Board, and Arc Miracle Box history pages from captured UDP data, applies conservative timestamp-boundary handling, and writes sanitized JSON suitable for tracker import.
 
 > [!NOTE]
-> The import JSON contains decoded history rows only. It does **not** export tokens, account IDs, role IDs, device IDs, server IPs, raw packets, cookies, session data, or any other capture metadata.
+> The import JSON contains decoded history rows and the shareable NTE user UID when it can be detected. It does **not** export tokens, account IDs, role IDs, device IDs, server IPs, raw packets, cookies, session data, or other capture metadata.
 
 ## Requirements
 
@@ -57,15 +57,17 @@ Use `--capture-backend libpcap` to require Npcap/libpcap without fallback, or `-
 Or simply double-click **`run-exporter.cmd`** — it asks for confirmation before requesting Administrator privileges, and does nothing until you agree.
 
 > [!IMPORTANT]
-> Launch the tool **before pressing Start on the game's main menu** so the game's UDP connection can be captured. If you are already in game, log out to the main menu and enter again.
+> For automatic user UID detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for your UID before saving if it cannot detect it automatically.
 
 Once running, open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as:
 
-- `Permanent_<date_time>.json`
-- `Limited_<date_time>.json`
-- `Arc_<date_time>.json`
+- `<user_uid>_Permanent_<date_time>.json`
+- `<user_uid>_Limited_<date_time>.json`
+- `<user_uid>_Arc_<date_time>.json`
 
-If only one banner is captured, the export JSON is copied to your clipboard. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
+If the user UID is not detected automatically, the console asks for it before saving. Leaving it blank saves as `unknown_<banner>_<date_time>.json`, but may prevent import on some trackers.
+
+Exports are not copied to the clipboard by default. Add `--copy-clipboard` to copy a single captured banner's JSON after saving. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
 
 If a page response is missed, the exporter reports the missing page number while capture is still running. Leave the exporter open, close and reopen that history board, then scroll down again. Scrolling backward within the existing view does not request the cached pages again. The replacement capture is accepted and the tool confirms when the gap has been recovered. If reopening the board still produces no page messages, return to the main menu and re-enter the game to start a fresh connection.
 
@@ -96,6 +98,8 @@ Decodes a `mitmproxy .flows` capture instead of listening live — used for rese
 | --------- | --------------------------------------------------- |
 | `--live`  | Capture live UDP traffic instead of reading a file. |
 | `--debug` | Also write the full research CSV next to each JSON. |
+| `--user-uid <uid>` | Override the auto-detected NTE user UID in the JSON export. |
+| `--copy-clipboard` | Copy a single live export JSON to clipboard after saving. |
 
 Advanced live-capture selection:
 
@@ -107,13 +111,15 @@ Advanced live-capture selection:
 
 The `--debug` CSV holds any extra information that might be needed for fixing bugs. It contains no dangerous personal account data — only the raw bytes of the captured history page.
 
+The exporter automatically includes the shareable NTE user UID when it appears in the capture. If a short capture does not include it, the console asks before saving; you can also pass it explicitly with `--user-uid`.
+
 > [!TIP]
 > For reliable deduplication, start from page 1 and scroll through the pages. If you only want pages 1–5, scroll through to page 6 as well just to be on the safe side.
 
 ## Privacy
 
 > [!CAUTION]
-> Do not commit packet captures, generated exports, research briefs, or personal account data. The repository keeps `exports/` as an empty output folder but ignores everything generated inside it.
+> Sanitized exports are intended for tracker import and should not contain anything especially harmful, but they can identify the game account via user UID and pull history. Share exports only with verified sources, such as known trackers. Do not commit packet captures, generated exports, research briefs, or personal account data. The repository keeps `exports/` as an empty output folder but ignores everything generated inside it.
 
 ## Boundary Policy
 

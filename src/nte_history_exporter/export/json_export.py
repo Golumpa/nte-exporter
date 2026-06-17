@@ -17,6 +17,8 @@ def build_export_json(
     warnings: list[dict[str, Any]],
     *,
     source: str = "packet_capture",
+    capture_source: str | None = None,
+    user_uid: str | None = None,
     flow_index: int | None = None,
     candidate_request_response_pairs: int | None = None,
     pages_seen: list[int] | None = None,
@@ -40,21 +42,31 @@ def build_export_json(
     if pages_seen is not None:
         scan["pages_seen"] = pages_seen
 
-    return {
+    normalized_user_uid = user_uid.strip() if user_uid else ""
+    export: dict[str, Any] = {
         "format": "nte-history-export",
         "format_version": 1,
         "game": GAME_NAME,
         "source": source,
-        "exporter": {"name": EXPORTER_NAME, "version": __version__},
-        "banner": {
-            "id": pool["id"],
-            "name": pool["name"],
-            "system": pool["system"],
-            "shared_pity": pool["shared_pity"],
-        },
-        "scan": scan,
-        "records": [_record_for_export(r) for r in exported],
     }
+    if capture_source:
+        export["capture_source"] = capture_source
+    export["exporter"] = {"name": EXPORTER_NAME, "version": __version__}
+    export.update(
+        {
+            "banner": {
+                "id": pool["id"],
+                "name": pool["name"],
+                "system": pool["system"],
+                "shared_pity": pool["shared_pity"],
+            },
+            "scan": scan,
+        }
+    )
+    if normalized_user_uid:
+        export["user_uid"] = normalized_user_uid
+    export["records"] = [_record_for_export(r) for r in exported]
+    return export
 
 
 def _record_for_export(row: dict[str, Any]) -> dict[str, Any]:
