@@ -538,6 +538,20 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded["quantity"], 30)
         self.assertEqual(make_uid(decoded, int(reference["timestamp_group_ordinal"])), "7d035ec098f856f81b403ea538810145")
 
+    def test_warp_piece_chase_subrecord_without_prefix_marker_is_chase_reward(self):
+        decoded = decode_single_record(
+            "c1c4b0ccc00000000000040000003c00000010a58d957dd1a58dad95d17dc1c400"
+            "4c0000000c85c99141bdbdb17d0da185c9858dd195c90140eb2c2dd7227b23"
+        )
+
+        self.assertEqual(decoded["result_type"], "chase_reward")
+        self.assertEqual(decoded["result_source_raw"], -4)
+        self.assertEqual(decoded["dice"], -4)
+        self.assertEqual(decoded["dice_raw_u32"], -4)
+        self.assertEqual(decoded["reward_id"], "Dice_ticket_01")
+        self.assertEqual(decoded["reward_name"], "Warp Piece")
+        self.assertEqual(decoded["quantity"], 30)
+
     def test_batched_monopoly_response_normalizes_embedded_page_header(self):
         page_7 = [load_v7_row("limited_all_04_v7.csv", row) for row in range(31, 36)]
         page_8 = [load_v7_row("limited_all_04_v7.csv", row) for row in range(36, 41)]

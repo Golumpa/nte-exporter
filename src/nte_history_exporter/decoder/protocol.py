@@ -18,6 +18,9 @@ from nte_history_exporter.constants import (
 from nte_history_exporter.mappings import REWARDS_BY_ID
 
 REWARD_ID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+WARP_PIECE_CHASE_PATTERN = bytes.fromhex(
+    "c4b0ccc00000000000040000003c00000010a58d957dd1a58dad95d17dc1c400"
+)
 
 
 def decode_reward_key(raw: bytes) -> str:
@@ -141,9 +144,12 @@ def classify_result_type(
     chunk_without_marker: bytes,
     dice: int | None,
     dice_offset: int | None,
+    reward_id: str = "",
 ) -> tuple[str, int | None]:
     if dice is None or dice_offset is None:
         return "unknown", None
+    if reward_id == "Dice_ticket_01" and WARP_PIECE_CHASE_PATTERN in chunk_without_marker:
+        return "chase_reward", -4
     if dice == 0:
         return "points_gift", 0
 
@@ -226,15 +232,15 @@ def _decode_aligned_response_records(response_content: bytes) -> list[dict[str, 
                 _, _, _, _, trim, chunk, dice, dice_raw, dice_offset = min(embedded_candidates)
                 record_start = prev + trim
                 full_record = response_content[prev + trim : marker_offset + len(marker) + 8]
-        result_type, result_source_raw = classify_result_type(chunk, dice, dice_offset)
+        key_hex = extract_key(chunk)
+        reward_id = decode_reward_key(bytes.fromhex(key_hex)) if key_hex else ""
+        result_type, result_source_raw = classify_result_type(chunk, dice, dice_offset, reward_id)
         if result_type == "points_gift":
             dice = 0
             dice_raw = 0
         elif result_type == "chase_reward":
             dice = -4
             dice_raw = -4
-        key_hex = extract_key(chunk)
-        reward_id = decode_reward_key(bytes.fromhex(key_hex)) if key_hex else ""
         reward = REWARDS_BY_ID.get(reward_id, {})
         timestamp_raw = response_content[marker_offset + len(marker) : marker_offset + len(marker) + 8]
         timestamp_ticks, timestamp_unix, timestamp_decoded = decode_history_timestamp(timestamp_raw)
