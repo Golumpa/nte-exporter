@@ -13,6 +13,7 @@ DIM = "\x1b[2m"
 CYAN = "\x1b[36m"
 GREEN = "\x1b[32m"
 YELLOW = "\x1b[33m"
+BRIGHT_WHITE = "\x1b[97m"
 
 _ansi: bool | None = None
 
@@ -68,10 +69,10 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
     print(style(f"  Capture backend: {backend}{backend_detail}", DIM))
     print()
     print(style("  How to export your pull history", BOLD))
-    print("    1. This tool must be running BEFORE you press Start on")
-    print("       the game's main menu, or the game connection cannot")
-    print("       be captured. Already in game? Log out to the main")
-    print("       menu and enter again.")
+    print("    1. For automatic user UID detection, start this tool")
+    print("       before pressing Start on the game's main menu.")
+    print("       Already in game? You can still capture history;")
+    print("       the tool will ask for your UID if it cannot detect it.")
     print("    2. Open a supported history screen:")
     print(style("         Monopoly  >  Standard Board history", CYAN))
     print(style("         Monopoly  >  Limited Character Board history", CYAN))
@@ -91,17 +92,20 @@ def print_page_captured(label: str, page: int | None, *, recaptured: bool = Fals
     print(style("  + ", GREEN, BOLD) + label + style(f"  {action} {page}", DIM))
 
 
-def print_missing_pages(label: str, pages: list[int], reasons: dict[int, str] | None = None) -> None:
+def print_missing_pages(label: str, pages: list[int]) -> None:
     page_list = ", ".join(str(page) for page in pages)
-    print(style("  ! ", YELLOW, BOLD) + f"{label} missing page(s): {page_list}.")
-    if reasons:
-        for page in pages:
-            print(style(f"    Page {page}: {reasons[page]}.", DIM))
-    print("    Close and reopen this history board, then scroll down again.")
+    print(style("  ! ", YELLOW, BOLD) + style(f"{label} missing page(s): {page_list}.", YELLOW, BOLD))
+    print(
+        style(
+            "    Close and reopen this history board, then scroll down until page gap recovered is shown.",
+            BRIGHT_WHITE,
+            BOLD,
+        )
+    )
 
 
 def print_page_gap_recovered(label: str) -> None:
-    print(style("  + ", GREEN, BOLD) + f"{label} page gap recovered.")
+    print(style("  + ", GREEN, BOLD) + style(f"{label} page gap recovered.", GREEN, BOLD))
 
 
 def print_capture_stats(received: int, dropped: int, interface_dropped: int) -> None:
@@ -151,3 +155,12 @@ def print_success(text: str) -> None:
 
 def print_problem(text: str) -> None:
     print(style(f"  {text}", YELLOW, BOLD))
+
+
+def prompt_user_uid() -> str | None:
+    print()
+    print_problem("User UID was not detected in this capture.")
+    print_note("Enter your NTE user UID so the export can be named and linked correctly.")
+    print_note("Leaving this blank may prevent import on some trackers.")
+    value = input("  User UID: ").strip()
+    return value or None

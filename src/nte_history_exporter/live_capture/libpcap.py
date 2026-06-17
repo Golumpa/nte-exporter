@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from nte_history_exporter.live_capture.windows_raw import ParsedIpUdpPacket, parse_ipv4_udp_packet
+from nte_history_exporter.live_capture.windows_raw import ParsedIpUdpPacket, parse_ipv4_packet
 
 PCAP_ERRBUF_SIZE = 256
 SNAP_LENGTH = 65535
@@ -103,7 +103,8 @@ def _load_library() -> ctypes.CDLL:
         npcap_dir = _windows_npcap_directory()
         if npcap_dir.is_dir() and hasattr(os, "add_dll_directory"):
             dll_directory = os.add_dll_directory(str(npcap_dir))
-        candidates.extend([str(npcap_dir / "wpcap.dll"), "wpcap.dll"])
+        candidates.append(str(npcap_dir / "wpcap.dll"))
+        candidates.append("wpcap.dll")
     elif sys.platform == "darwin":
         candidates.extend(
             [
@@ -351,7 +352,7 @@ class LibpcapCapture:
                 raise LibpcapUnavailable(_pcap_error(self.lib, self.handle))
 
             program = _BpfProgram()
-            filter_expression = f"udp and host {local_ip}".encode("ascii")
+            filter_expression = f"host {local_ip} and (udp or tcp)".encode("ascii")
             if self.lib.pcap_compile(self.handle, ctypes.byref(program), filter_expression, 1, 0xFFFFFFFF) != 0:
                 raise LibpcapUnavailable(_pcap_error(self.lib, self.handle))
             try:
@@ -382,7 +383,7 @@ class LibpcapCapture:
             ipv4_packet = _extract_ipv4_frame(frame, self.datalink)
             if ipv4_packet is None:
                 continue
-            packet = parse_ipv4_udp_packet(ipv4_packet)
+            packet = parse_ipv4_packet(ipv4_packet)
             if packet is not None:
                 yield packet
 

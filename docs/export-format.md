@@ -8,9 +8,10 @@ The sanitized JSON export uses:
   "format_version": 1,
   "game": "Neverness to Everness",
   "source": "packet_capture",
+  "capture_source": "npcap",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.1"
+    "version": "0.1.3"
   },
   "banner": {
     "id": "Lottery_Permanent",
@@ -26,6 +27,7 @@ The sanitized JSON export uses:
     "skipped_records": 0,
     "warnings": []
   },
+  "user_uid": "optional-user-uid",
   "records": []
 }
 ```
@@ -85,3 +87,6 @@ Example Arc record:
 ```
 
 Normal JSON exports do not include raw packets or capture-only metadata.
+`user_uid` is included when detected automatically or supplied with `--user-uid`.
+`capture_source` records the capture backend/source used for the export, such as
+`npcap`, `libpcap`, `windows_packet`, or `mitmproxy_flows`.

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.arc import build_arc_rows_from_pairs, select_continuous_arc_run
 from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
 
 
@@ -77,6 +79,12 @@ def find_udp_flow(flows: list[Any], preferred_index: int | None = None) -> tuple
 
 def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> dict[str, Any]:
     flows = read_flows(path)
+    user_uid_candidates: Counter[str] = Counter()
+    for flow in flows:
+        for msg in flow.get(b"messages", []):
+            user_uid_candidates.update(extract_user_uid_candidates(msg[1]))
+    user_uid = user_uid_candidates.most_common(1)[0][0] if user_uid_candidates else None
+
     resolved_flow_index, flow = find_udp_flow(flows, flow_index)
     messages = flow[b"messages"]
 
@@ -110,4 +118,5 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         "best_arc_run": best_arc_run,
         "arc_rows": arc_rows,
         "arc_warnings": arc_warnings,
+        "user_uid": session.user_uid or user_uid,
     }

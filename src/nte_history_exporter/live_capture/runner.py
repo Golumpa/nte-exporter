@@ -24,6 +24,10 @@ EXPORT_PREFIXES = {
     "arc_miracle_box": "Arc",
 }
 
+CAPTURE_SOURCE_LABELS = {
+    "windows_raw": "windows_packet",
+}
+
 
 def copy_to_clipboard(text: str) -> bool:
     try:
@@ -60,8 +64,9 @@ def run_live_capture(
     *,
     interface_ip: str | None = None,
     capture_backend: str = "auto",
-    copy_clipboard: bool = True,
+    copy_clipboard: bool = False,
     write_debug_csv: bool = False,
+    user_uid: str | None = None,
 ) -> dict:
     local_ip = interface_ip or detect_local_ipv4()
     session = LiveHistorySession(local_ip)
@@ -71,6 +76,7 @@ def run_live_capture(
     if capture.fallback_reason:
         console.print_capture_fallback(capture.fallback_reason)
     reported_missing_pages: dict[str, tuple[int, ...]] = {}
+    active_gap_notices: set[str] = set()
 
     try:
         with StopKeyMonitor() as stop_key:
@@ -88,6 +94,7 @@ def run_live_capture(
                         src_port=packet.src_port,
                         dst_port=packet.dst_port,
                         payload=packet.payload,
+                        protocol=packet.protocol,
                     )
                 )
                 if matched:
@@ -109,14 +116,12 @@ def run_live_capture(
                         label = POOL_META.get(kind, POOL_META["permanent"])["name"]
                         missing_pages = tuple(session.missing_pages(kind))
                         previously_missing = reported_missing_pages.get(kind, ())
-                        if missing_pages and missing_pages != previously_missing:
-                            reasons = {
-                                page: session.missing_page_reason(kind, page)
-                                for page in missing_pages
-                            }
-                            console.print_missing_pages(label, list(missing_pages), reasons)
+                        if missing_pages and kind not in active_gap_notices:
+                            console.print_missing_pages(label, list(missing_pages))
+                            active_gap_notices.add(kind)
                         elif previously_missing and not missing_pages:
                             console.print_page_gap_recovered(label)
+                            active_gap_notices.discard(kind)
                         reported_missing_pages[kind] = missing_pages
     finally:
         stats = capture.stats()
@@ -130,6 +135,10 @@ def run_live_capture(
         )
 
     exports = []
+    resolved_user_uid = user_uid or session.user_uid
+    if session.kinds_seen() and not resolved_user_uid:
+        resolved_user_uid = console.prompt_user_uid()
+    capture_source = CAPTURE_SOURCE_LABELS.get(capture.name, capture.name)
     for kind in session.kinds_seen():
         pairs = session.pairs_for_kind(kind)
         best_run, run_warnings = select_continuous_run_from_page_1(pairs)
@@ -138,13 +147,15 @@ def run_live_capture(
             rows = annotate_groups(rows)
         warnings = run_warnings
         pages_seen = [p[0] for p in best_run]
-        csv_path, json_path = export_paths(kind)
+        csv_path, json_path = export_paths(kind, resolved_user_uid)
         if write_debug_csv:
             write_csv(csv_path, rows)
         export = build_export_json(
             rows,
             warnings,
             source="live_capture",
+            capture_source=capture_source,
+            user_uid=resolved_user_uid,
             pages_seen=pages_seen,
         )
         payload = json.dumps(export, ensure_ascii=False, indent=2)
@@ -162,9 +173,9 @@ def run_live_capture(
     console.print_results_header()
     if not exports:
         console.print_problem("No history pages were captured.")
-        console.print_note("This tool must already be running when you press Start on the")
-        console.print_note("game's main menu. Log out to the main menu, enter the game")
-        console.print_note("again, then reopen the history screen.")
+        console.print_note("Make sure the capture backend is running, then reopen the")
+        console.print_note("history screen and scroll from page 1. If no page messages")
+        console.print_note("appear, return to the main menu and re-enter the game.")
         return {"exports": []}
 
     for item in exports:
@@ -189,24 +200,33 @@ def run_live_capture(
             console.print_success("Export copied to clipboard - paste it straight into your tracker.")
         else:
             console.print_note("Clipboard tool unavailable; use the JSON file shown above.")
-    elif len(exports) > 1:
+    elif copy_clipboard and len(exports) > 1:
         console.print_note("Multiple banners captured; clipboard copy skipped so one export")
         console.print_note("does not overwrite another.")
     return {"exports": exports}
 
 
-def export_paths(kind: str) -> tuple[Path, Path]:
+def export_paths(kind: str, user_uid: str | None = None) -> tuple[Path, Path]:
     export_dir = Path("exports")
     export_dir.mkdir(parents=True, exist_ok=True)
     prefix = EXPORT_PREFIXES.get(kind, "History")
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base = export_dir / f"{prefix}_{stamp}"
+    uid_prefix = _safe_filename_part(user_uid) if user_uid else "unknown"
+    base_name = f"{uid_prefix}_{prefix}_{stamp}"
+    base = export_dir / base_name
     csv_path = base.with_suffix(".csv")
     json_path = base.with_suffix(".json")
     counter = 2
     while csv_path.exists() or json_path.exists():
-        base = export_dir / f"{prefix}_{stamp}_{counter}"
+        base = export_dir / f"{base_name}_{counter}"
         csv_path = base.with_suffix(".csv")
         json_path = base.with_suffix(".json")
         counter += 1
     return csv_path, json_path
+
+
+def _safe_filename_part(value: str | None) -> str:
+    if not value:
+        return "unknown"
+    cleaned = "".join(ch for ch in value.strip() if ch.isalnum() or ch in ("-", "_"))
+    return cleaned or "unknown"

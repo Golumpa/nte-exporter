@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +19,7 @@ from nte_history_exporter.decoder.protocol import (
     request_page,
 )
 from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
 
 
 @dataclass
@@ -29,6 +30,7 @@ class UdpPacket:
     src_port: int
     dst_port: int
     payload: bytes
+    protocol: str = "udp"
 
 
 @dataclass
@@ -57,6 +59,8 @@ class LiveHistorySession:
         self.last_capture_was_replacement = False
         self.requested_pages: dict[str, set[int]] = {}
         self.unanswered_pages: dict[str, dict[int, str]] = {}
+        self.user_uid: str | None = None
+        self.user_uid_candidates: Counter[str] = Counter()
 
     def _mark_unanswered(self, request: PendingRequest) -> None:
         if request.response_candidates:
@@ -93,6 +97,12 @@ class LiveHistorySession:
 
     def process_packet(self, packet: UdpPacket) -> bool:
         self.packet_count += 1
+        candidates = extract_user_uid_candidates(packet.payload)
+        if candidates:
+            self.user_uid_candidates.update(candidates)
+            self.user_uid = self.user_uid_candidates.most_common(1)[0][0]
+        if packet.protocol != "udp":
+            return False
 
         if packet.src_ip == self.local_ip and is_history_request(packet.payload):
             offset = int.from_bytes(packet.payload[31:35], "little")

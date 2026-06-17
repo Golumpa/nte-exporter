@@ -24,10 +24,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--capture-backend",
         choices=["auto", "libpcap", "raw"],
         default="auto",
-        help="live capture backend; auto prefers Npcap/libpcap and falls back to raw sockets on Windows",
+        help=(
+            "live capture backend; auto prefers Npcap/libpcap and falls back to raw sockets on Windows "
+            "(default: %(default)s)"
+        ),
     )
-    parser.add_argument("--no-clipboard", action="store_true", help="do not copy live exports to clipboard")
+    parser.add_argument("--copy-clipboard", action="store_true", help="copy a single live export to clipboard")
     parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
+    parser.add_argument("--user-uid", default=None, help="override the auto-detected NTE user UID in the JSON export")
     return parser
 
 
@@ -39,8 +43,9 @@ def main(argv: list[str] | None = None) -> int:
             run_live_capture(
                 interface_ip=args.interface_ip,
                 capture_backend=args.capture_backend,
-                copy_clipboard=not args.no_clipboard,
+                copy_clipboard=args.copy_clipboard,
                 write_debug_csv=args.debug,
+                user_uid=args.user_uid,
             )
             return 0
         except (LibpcapUnavailable, PermissionError) as exc:
@@ -62,13 +67,19 @@ def main(argv: list[str] | None = None) -> int:
         best_run = decoded["best_run"]
         pair_count = len(decoded["pairs"])
 
-    out_path, json_path = export_paths(kind)
+    resolved_user_uid = args.user_uid or decoded.get("user_uid")
+    if not resolved_user_uid:
+        resolved_user_uid = console.prompt_user_uid()
+
+    out_path, json_path = export_paths(kind, resolved_user_uid)
     if args.debug:
         write_csv(out_path, rows)
     export = build_export_json(
         rows,
         warnings,
         source="packet_capture",
+        capture_source="mitmproxy_flows",
+        user_uid=resolved_user_uid,
         flow_index=decoded["flow_index"],
         candidate_request_response_pairs=pair_count,
         pages_seen=[p[0] for p in best_run],
