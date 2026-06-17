@@ -76,6 +76,7 @@ def run_live_capture(
     if capture.fallback_reason:
         console.print_capture_fallback(capture.fallback_reason)
     reported_missing_pages: dict[str, tuple[int, ...]] = {}
+    active_gap_notices: set[str] = set()
 
     try:
         with StopKeyMonitor() as stop_key:
@@ -115,14 +116,12 @@ def run_live_capture(
                         label = POOL_META.get(kind, POOL_META["permanent"])["name"]
                         missing_pages = tuple(session.missing_pages(kind))
                         previously_missing = reported_missing_pages.get(kind, ())
-                        if missing_pages and missing_pages != previously_missing:
-                            reasons = {
-                                page: session.missing_page_reason(kind, page)
-                                for page in missing_pages
-                            }
-                            console.print_missing_pages(label, list(missing_pages), reasons)
+                        if missing_pages and kind not in active_gap_notices:
+                            console.print_missing_pages(label, list(missing_pages))
+                            active_gap_notices.add(kind)
                         elif previously_missing and not missing_pages:
                             console.print_page_gap_recovered(label)
+                            active_gap_notices.discard(kind)
                         reported_missing_pages[kind] = missing_pages
     finally:
         stats = capture.stats()

@@ -13,6 +13,7 @@ DIM = "\x1b[2m"
 CYAN = "\x1b[36m"
 GREEN = "\x1b[32m"
 YELLOW = "\x1b[33m"
+BRIGHT_WHITE = "\x1b[97m"
 
 _ansi: bool | None = None
 
@@ -91,17 +92,20 @@ def print_page_captured(label: str, page: int | None, *, recaptured: bool = Fals
     print(style("  + ", GREEN, BOLD) + label + style(f"  {action} {page}", DIM))
 
 
-def print_missing_pages(label: str, pages: list[int], reasons: dict[int, str] | None = None) -> None:
+def print_missing_pages(label: str, pages: list[int]) -> None:
     page_list = ", ".join(str(page) for page in pages)
-    print(style("  ! ", YELLOW, BOLD) + f"{label} missing page(s): {page_list}.")
-    if reasons:
-        for page in pages:
-            print(style(f"    Page {page}: {reasons[page]}.", DIM))
-    print("    Close and reopen this history board, then scroll down again.")
+    print(style("  ! ", YELLOW, BOLD) + style(f"{label} missing page(s): {page_list}.", YELLOW, BOLD))
+    print(
+        style(
+            "    Close and reopen this history board, then scroll down until page gap recovered is shown.",
+            BRIGHT_WHITE,
+            BOLD,
+        )
+    )
 
 
 def print_page_gap_recovered(label: str) -> None:
-    print(style("  + ", GREEN, BOLD) + f"{label} page gap recovered.")
+    print(style("  + ", GREEN, BOLD) + style(f"{label} page gap recovered.", GREEN, BOLD))
 
 
 def print_capture_stats(received: int, dropped: int, interface_dropped: int) -> None:
