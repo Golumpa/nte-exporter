@@ -15,7 +15,7 @@ decoder-only offsets.
   "capture_source": "npcap",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.7"
+    "version": "0.1.8"
   },
   "banner": {
     "id": "Lottery_Permanent",
