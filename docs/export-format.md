@@ -72,7 +72,7 @@ Current stable pool IDs:
   banners should still use this ID while they share the same history/pity pool.
 - `Arc_MiracleBox`: Arc Miracle Box.
 
-Avoid using `banner.name`, `reward_name`, or `reward_rank` as primary IDs. They
+Avoid using `banner.name`, `reward_name`, `reward_type` or `reward_rank` as primary IDs. They
 are useful display fields, but may change when mapping files are updated.
 
 ## Stability notes
