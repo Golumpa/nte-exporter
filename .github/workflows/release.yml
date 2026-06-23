@@ -7,9 +7,38 @@ permissions:
   contents: write
 
 jobs:
+  validate-release:
+    name: Validate Release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check release tag is new
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          tag="v${version}"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "::error title=Release tag already exists::${tag} already exists. Bump project.version in pyproject.toml before running the release workflow."
+            exit 1
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error title=GitHub release already exists::${tag} already has a GitHub release. Bump project.version in pyproject.toml before running the release workflow."
+            exit 1
+          fi
+
   build-windows:
     name: Build Windows
     if: github.ref == 'refs/heads/main'
+    needs: validate-release
     runs-on: windows-latest
 
     steps:
@@ -44,6 +73,7 @@ jobs:
   build-linux:
     name: Build Linux
     if: github.ref == 'refs/heads/main'
+    needs: validate-release
     runs-on: ubuntu-latest
 
     steps:
@@ -81,6 +111,7 @@ jobs:
   build-macos:
     name: Build Macos
     if: github.ref == 'refs/heads/main'
+    needs: validate-release
     runs-on: macos-15-intel
 
     steps:
@@ -195,9 +226,14 @@ jobs:
             nte-history-exporter-v${version}-x86_64-apple-darwin.zip
           )
 
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --notes-file release-notes.md
-            gh release upload "$tag" "${files[@]}" --clobber
-          else
-            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes-file release-notes.md
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "::error title=Release tag already exists::${tag} already exists. Bump project.version in pyproject.toml before running the release workflow."
+            exit 1
           fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error title=GitHub release already exists::${tag} already has a GitHub release. Bump project.version in pyproject.toml before running the release workflow."
+            exit 1
+          fi
+
+          gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes-file release-notes.md
