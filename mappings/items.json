@@ -11,5 +11,8 @@
   "Fashion_1052_1": {"type": "cosmetic", "name": "Priceless Orchid", "rank": "S"},
   "Fashion_Glide_1004": {"type": "cosmetic", "name": "Tomato Duo", "rank": "A"},
   "Fashion_vehicle_1004_V021": {"type": "cosmetic", "name": "Tomato Cruise - Livery", "rank": "S"},
-  "Fashion_1004_1": {"type": "cosmetic", "name": "Gilded Rhapsody", "rank": "S"}
+  "Fashion_1004_1": {"type": "cosmetic", "name": "Gilded Rhapsody", "rank": "S"},
+  "Fashion_Glide_1071": {"type": "cosmetic", "name": "Skyrider", "rank": "A"},
+  "Fashion_vehicle_1071_V010": {"type": "cosmetic", "name": "Novis ST-X 950 Livery", "rank": "S"},
+  "Fashion_1071_1": {"type": "cosmetic", "name": "Clear Skies", "rank": "S"}
 }
