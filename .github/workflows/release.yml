@@ -121,12 +121,35 @@ jobs:
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Get package version
         id: package-version
         run: |
           version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Release Notes
+        run: |
+          version="${{ steps.package-version.outputs.version }}"
+          tag="v${version}"
+          previous_tag="$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+(\.[0-9]+)*' | grep -vx "$tag" | head -n 1 || true)"
+
+          {
+            echo "Release ${tag}"
+            echo
+            echo "## Commits included in this release"
+            echo
+            if [ -n "$previous_tag" ]; then
+              echo "Changes since ${previous_tag}:"
+              echo
+              git log "${previous_tag}..HEAD" --pretty=format:'- `%h` %s'
+            else
+              git log --pretty=format:'- `%h` %s'
+            fi
+            echo
+          } > release-notes.md
 
       - name: Download Artifacts
         uses: actions/download-artifact@v7
@@ -161,7 +184,8 @@ jobs:
           )
 
           if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file release-notes.md
             gh release upload "$tag" "${files[@]}" --clobber
           else
-            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes "Release ${tag}"
+            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes-file release-notes.md
           fi
