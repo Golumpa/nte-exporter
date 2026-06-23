@@ -92,7 +92,7 @@ nice names or ranks.
 
 ## UID generation
 
-The `uid` is the first 32 hex characters of `sha256(source)`.
+The `uid` is the first 32 hex characters of `sha256(source)`. We generate our own roll UID as the game does not send their own, so to make things trackable and to help prevent duplicates we create our own UID with a selection of feilds making each entry in the history 100% unique. The way it is done means on a rescan the same UID is generated for the same history item even if it is further in the history and you have pulled more since the last scan.
 
 Monopoly source:
 
