@@ -134,6 +134,7 @@ jobs:
         run: |
           version="${{ steps.package-version.outputs.version }}"
           tag="v${version}"
+          repo_url="${{ github.server_url }}/${{ github.repository }}"
           previous_tag="$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+(\.[0-9]+)*' | grep -vx "$tag" | head -n 1 || true)"
 
           {
@@ -143,12 +144,23 @@ jobs:
             echo
             if [ -n "$previous_tag" ]; then
               echo "Changes since ${previous_tag}:"
-              echo
-              git log "${previous_tag}..HEAD" --pretty=format:'- `%h` %s'
+              commit_range="${previous_tag}..HEAD"
             else
-              git log --pretty=format:'- `%h` %s'
+              commit_range="HEAD"
             fi
             echo
+
+            while IFS= read -r commit; do
+              short_hash="$(git show -s --format='%h' "$commit")"
+              title="$(git show -s --format='%s' "$commit")"
+              description="$(git show -s --format='%b' "$commit")"
+
+              echo "- [\`${short_hash}\`](${repo_url}/commit/${commit}) ${title}"
+              if [ -n "$description" ]; then
+                echo "$description" | sed 's/^/    /'
+              fi
+              echo
+            done < <(git rev-list "$commit_range")
           } > release-notes.md
 
       - name: Download Artifacts
