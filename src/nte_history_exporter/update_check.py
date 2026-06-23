@@ -29,6 +29,9 @@ def check_for_update(current_version: str, *, timeout: float = 1.5) -> UpdateInf
     except Exception:
         return None
 
+    if latest.get("prerelease"):
+        return None
+
     latest_version = str(latest.get("tag_name", "")).strip()
     release_url = str(latest.get("html_url", "")).strip() or RELEASES_URL
     if not latest_version or not is_newer_version(latest_version, current_version):

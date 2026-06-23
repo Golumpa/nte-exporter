@@ -225,6 +225,15 @@ class BoundaryExportTests(unittest.TestCase):
             ),
         )
 
+    def test_update_check_ignores_prerelease(self):
+        latest = {
+            "tag_name": "v0.1.8-dev-branch.123",
+            "html_url": "https://github.com/Golumpa/nte-exporter/releases/tag/v0.1.8-dev-branch.123",
+            "prerelease": True,
+        }
+        with patch("nte_history_exporter.update_check.fetch_latest_release", return_value=latest):
+            self.assertIsNone(check_for_update("0.1.7", timeout=0.1))
+
     def test_update_check_is_quiet_when_unavailable_or_current(self):
         with patch("nte_history_exporter.update_check.fetch_latest_release", side_effect=OSError("offline")):
             self.assertIsNone(check_for_update("0.1.6", timeout=0.1))
