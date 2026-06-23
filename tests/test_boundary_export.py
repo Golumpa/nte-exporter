@@ -49,6 +49,7 @@ from nte_history_exporter.live_capture.backends import open_capture_backend
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.runner import export_paths
 from nte_history_exporter.pool_mappings import load_pool_mappings, pool_meta_from_mapping
+from nte_history_exporter.update_check import UpdateInfo, check_for_update, is_newer_version
 
 
 def load_reference_csv(name):
@@ -198,6 +199,38 @@ class BoundaryExportTests(unittest.TestCase):
         for pool_key, mapping in load_pool_mappings().items():
             with self.subTest(pool_key=pool_key):
                 self.assertEqual(pool_meta_from_mapping(mapping), POOL_META[pool_key])
+
+    def test_update_version_comparison_handles_release_tags(self):
+        self.assertTrue(is_newer_version("v0.1.7", "0.1.6"))
+        self.assertTrue(is_newer_version("0.2.0", "0.1.6"))
+        self.assertTrue(is_newer_version("v0.1.10", "0.1.9"))
+        self.assertFalse(is_newer_version("v0.1.6", "0.1.6"))
+        self.assertFalse(is_newer_version("v0.1.5", "0.1.6"))
+        self.assertFalse(is_newer_version("latest", "0.1.6"))
+
+    def test_update_check_reports_newer_github_release(self):
+        latest = {
+            "tag_name": "v0.1.7",
+            "html_url": "https://github.com/Golumpa/nte-exporter/releases/tag/v0.1.7",
+        }
+        with patch("nte_history_exporter.update_check.fetch_latest_release", return_value=latest):
+            update = check_for_update("0.1.6", timeout=0.1)
+
+        self.assertEqual(
+            update,
+            UpdateInfo(
+                current_version="0.1.6",
+                latest_version="v0.1.7",
+                release_url="https://github.com/Golumpa/nte-exporter/releases/tag/v0.1.7",
+            ),
+        )
+
+    def test_update_check_is_quiet_when_unavailable_or_current(self):
+        with patch("nte_history_exporter.update_check.fetch_latest_release", side_effect=OSError("offline")):
+            self.assertIsNone(check_for_update("0.1.6", timeout=0.1))
+
+        with patch("nte_history_exporter.update_check.fetch_latest_release", return_value={"tag_name": "v0.1.6"}):
+            self.assertIsNone(check_for_update("0.1.6", timeout=0.1))
 
     def test_reward_mapping_files_have_expected_shape(self):
         self.assertTrue(ARC_META)

@@ -5,11 +5,13 @@ import json
 
 from nte_history_exporter import console
 from nte_history_exporter.adapters.mitmproxy_flows import decode_mitmproxy_flows
+from nte_history_exporter.constants import EXPORTER_VERSION
 from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.libpcap import LibpcapUnavailable
 from nte_history_exporter.live_capture.runner import export_paths, run_live_capture
+from nte_history_exporter.update_check import check_for_update
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     console.print_banner()
+    update = check_for_update(EXPORTER_VERSION)
+    if update:
+        console.print_update_available(update.current_version, update.latest_version, update.release_url)
     if args.live or not args.capture_source:
         try:
             run_live_capture(

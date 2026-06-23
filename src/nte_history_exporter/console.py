@@ -13,6 +13,7 @@ BOLD = "\x1b[1m"
 DIM = "\x1b[2m"
 CYAN = "\x1b[36m"
 GREEN = "\x1b[32m"
+RED = "\x1b[31m"
 YELLOW = "\x1b[33m"
 BRIGHT_WHITE = "\x1b[97m"
 
@@ -62,7 +63,7 @@ def print_banner() -> None:
     print(style(f"  {GAME_NAME} pull history -> tracker JSON", DIM))
     print(style(f"  {REPOSITORY_URL}", DIM))
     heart = "❤️" if (getattr(sys.stdout, "encoding", None) or "").lower().replace("-", "") == "utf8" else "<3"
-    print(style(f"  Created with {heart} by Golumpa", DIM))
+    print(style("  Created with ", DIM) + style(heart, RED) + style(" by Golumpa", DIM))
     print(rule("="))
 
 
@@ -160,6 +161,14 @@ def print_success(text: str) -> None:
 
 def print_problem(text: str) -> None:
     print(style(f"  {text}", YELLOW, BOLD))
+
+
+def print_update_available(current_version: str, latest_version: str, release_url: str) -> None:
+    print()
+    print(style(f"  Update available: v{current_version} -> {latest_version}", YELLOW, BOLD))
+    print(style("  Some banner/reward mappings may be incomplete in this version.", YELLOW))
+    print(style("  Updating is recommended for the most accurate export labels.", YELLOW))
+    print(style(f"  Download when ready: {release_url}", YELLOW))
 
 
 def prompt_user_uid() -> str | None:
