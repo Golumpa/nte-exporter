@@ -121,12 +121,47 @@ jobs:
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Get package version
         id: package-version
         run: |
           version="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Release Notes
+        run: |
+          version="${{ steps.package-version.outputs.version }}"
+          tag="v${version}"
+          repo_url="${{ github.server_url }}/${{ github.repository }}"
+          previous_tag="$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+(\.[0-9]+)*' | grep -vx "$tag" | head -n 1 || true)"
+
+          {
+            echo "Release ${tag}"
+            echo
+            echo "## Commits included in this release"
+            echo
+            if [ -n "$previous_tag" ]; then
+              echo "Changes since ${previous_tag}:"
+              commit_range="${previous_tag}..HEAD"
+            else
+              commit_range="HEAD"
+            fi
+            echo
+
+            while IFS= read -r commit; do
+              short_hash="$(git show -s --format='%h' "$commit")"
+              title="$(git show -s --format='%s' "$commit")"
+              description="$(git show -s --format='%b' "$commit")"
+
+              echo "- [\`${short_hash}\`](${repo_url}/commit/${commit}) ${title}"
+              if [ -n "$description" ]; then
+                echo "$description" | sed 's/^/    /'
+              fi
+              echo
+            done < <(git rev-list "$commit_range")
+          } > release-notes.md
 
       - name: Download Artifacts
         uses: actions/download-artifact@v7
@@ -161,7 +196,8 @@ jobs:
           )
 
           if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file release-notes.md
             gh release upload "$tag" "${files[@]}" --clobber
           else
-            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes "Release ${tag}"
+            gh release create "$tag" "${files[@]}" --title "${tag} Release" --notes-file release-notes.md
           fi
