@@ -4,7 +4,10 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from nte_history_exporter import __version__
+
 FIELDNAMES = [
+    "exporter_version",
     "uid",
     "uid_status",
     "export_record",
@@ -54,4 +57,4 @@ def write_csv(path: str | Path, rows: list[dict[str, Any]]) -> None:
     with Path(path).open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({**row, "exporter_version": __version__} for row in rows)

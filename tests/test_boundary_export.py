@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -13,6 +14,7 @@ ARC_EXPORTS = EXPORTS / "arc"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from nte_history_exporter import __version__
 from nte_history_exporter.decoder.boundary import annotate_groups, make_uid
 from nte_history_exporter.constants import LIMITED_CHARACTER_MARKER, MARKER
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
@@ -21,6 +23,7 @@ from nte_history_exporter.constants import POOL_META
 from nte_history_exporter.mappings import ARC_META, CHARACTERS, ITEMS, REWARDS_BY_ID
 from nte_history_exporter.decoder.protocol import decode_reward_key, infer_reward_type
 from nte_history_exporter.decoder.user_uid import extract_user_uid
+from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.decoder.arc import (
     arc_request_page,
     build_arc_rows_from_pairs,
@@ -392,6 +395,17 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(list(export).index("user_uid"), list(export).index("records") - 1)
         self.assertEqual(export["capture_source"], "npcap")
         self.assertEqual(export["user_uid"], "123456789")
+
+    def test_debug_csv_includes_exporter_version(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "debug.csv"
+            write_csv(path, [{"uid": "abc123"}])
+
+            with path.open(newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+
+        self.assertEqual(rows[0]["exporter_version"], __version__)
+        self.assertEqual(rows[0]["uid"], "abc123")
 
     def test_export_paths_include_user_uid_banner_and_timestamp(self):
         _csv_path, json_path = export_paths("limited_character", "218216016349")

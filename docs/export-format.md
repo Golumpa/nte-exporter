@@ -1,6 +1,10 @@
 # Export Format
 
-The sanitized JSON export uses:
+The JSON export is the format to use when building tools around captured NTE
+history. It is cleaned for import/use and does not include raw packet bytes or
+decoder-only offsets.
+
+## JSON shape
 
 ```json
 {
@@ -32,27 +36,79 @@ The sanitized JSON export uses:
 }
 ```
 
-Record UIDs are deterministic:
+Top-level fields:
+
+- `format` / `format_version`: Identify this export format.
+- `game`: Game name.
+- `source` / `capture_source`: Where the export came from.
+- `exporter`: Exporter name and version.
+- `banner`: The history pool this file belongs to.
+- `scan`: Export counts and capture warnings.
+- `user_uid`: Optional game account UID, if known.
+- `records`: Pull/reward records.
+
+## Fields to identify pulls
+
+For most tools, prefer these fields:
+
+- `uid`: Stable unique ID for this exported pull/reward row.
+- `user_uid`: Account UID, when present. Use this with `uid` if storing data for
+  multiple accounts.
+- `pool_group_id`: Stable pool ID for the record.
+- `banner.id`: Stable pool ID for the whole file. This should match
+  `pool_group_id` on records.
+- `timestamp`: Display timestamp from the game history.
+- `timestamp_group_ordinal`: Stable ordering inside records that share the same
+  timestamp.
+- `reward_id`: Stable decoded reward ID.
+- `reward_type`: Reward category, such as `character`, `item`, or `arc`.
+- `quantity`: Reward quantity, for Monopoly records.
+- `roll_result` / `result_type`: Monopoly result details.
+
+Current stable pool IDs:
+
+- `Lottery_Permanent`: Standard Board.
+- `Lottery_LimitedCharacter`: Limited Character Board. New limited character
+  banners should still use this ID while they share the same history/pity pool.
+- `Arc_MiracleBox`: Arc Miracle Box.
+
+Avoid using `banner.name`, `reward_name`, or `reward_rank` as primary IDs. They
+are useful display fields, but may change when mapping files are updated.
+
+## Stability notes
+
+Every JSON record is exported with a stable `uid`. Re-scanning deeper history can
+add older rows, but already exported rows keep the same `uid`.
+
+Limited character banners are grouped by their shared history pool, not by the
+currently featured character. If the game adds a new visible limited character
+banner that uses the same pool, tools should continue treating it as
+`Lottery_LimitedCharacter`.
+
+If the game adds a genuinely new history pool, the exporter mappings need to be
+updated before tools can identify it cleanly. Reward display data also comes from
+the mapping files, so new rewards may export with stable IDs before they have
+nice names or ranks.
+
+## UID generation
+
+The `uid` is the first 32 hex characters of `sha256(source)`.
+
+Monopoly source:
+
+```text
+nte|monopoly|pool_group_id|timestamp_raw|timestamp_group_ordinal|roll_result|reward_key_hex|quantity
+```
+
+Arc source:
+
+```text
+nte|gashapon|pool_group_id|timestamp_raw|timestamp_group_ordinal|reward_key_hex
+```
+
+## Example records
 
 Monopoly:
-
-```text
-nte|monopoly|Lottery_Permanent|timestamp_raw|timestamp_group_ordinal|roll_result|reward_key_hex|quantity
-```
-
-Limited character records use `Lottery_LimitedCharacter` in the same UID source position.
-
-Arc:
-
-```text
-nte|gashapon|Arc_MiracleBox|timestamp_raw|timestamp_group_ordinal|reward_key_hex
-```
-
-The final UID is `sha256(source).hexdigest()[0:32]`.
-
-Each record includes `pool_group_id`. Arc records use the shared `reward_*` fields and include `source_type: "miracle_box"`.
-
-Example Monopoly pull record:
 
 ```json
 {
@@ -70,7 +126,7 @@ Example Monopoly pull record:
 }
 ```
 
-Example Arc record:
+Arc:
 
 ```json
 {
@@ -86,7 +142,7 @@ Example Arc record:
 }
 ```
 
-Normal JSON exports do not include raw packets or capture-only metadata.
-`user_uid` is included when detected automatically or supplied with `--user-uid`.
-`capture_source` records the capture backend/source used for the export, such as
-`npcap`, `libpcap`, `windows_packet`, or `mitmproxy_flows`.
+## CSV diagnostics
+
+CSV exports are mainly for debugging the decoder. Tools should prefer JSON
+unless they specifically need raw packet details.
