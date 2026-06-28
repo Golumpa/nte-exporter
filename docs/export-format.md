@@ -92,18 +92,22 @@ nice names or ranks.
 
 ## UID generation
 
-The `uid` is the first 32 hex characters of `sha256(source)`. We generate our own roll UID as the game does not send their own, so to make things trackable and to help prevent duplicates we create our own UID with a selection of feilds making each entry in the history 100% unique. The way it is done means on a rescan the same UID is generated for the same history item even if it is further in the history and you have pulled more since the last scan.
+The `uid` is the first 32 hex characters of `sha256(source)`. The game does not
+appear to send a stable pull/reward row ID, so the exporter builds one from the
+history pool, raw packet timestamp, and ordinal inside that timestamp group.
+Decoded content such as dice result, reward ID, and quantity is intentionally
+excluded so decoder fixes do not change the identity of an already-captured row.
 
 Monopoly source:
 
 ```text
-nte|monopoly|pool_group_id|timestamp_raw|timestamp_group_ordinal|roll_result|reward_key_hex|quantity
+nte|monopoly|pool_group_id|timestamp_raw|timestamp_group_ordinal
 ```
 
 Arc source:
 
 ```text
-nte|gashapon|pool_group_id|timestamp_raw|timestamp_group_ordinal|reward_key_hex
+nte|gashapon|pool_group_id|timestamp_raw|timestamp_group_ordinal
 ```
 
 ## Example records

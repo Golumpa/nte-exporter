@@ -300,9 +300,9 @@ class BoundaryExportTests(unittest.TestCase):
     def test_uid_source_matches_v4_reference(self):
         rows = load_reference_csv("monopoly_history_poc_10_all_44_pages_v4.csv")
         first = rows[0]
-        self.assertEqual(make_uid(first, 0), "5adcf52282e15445466863b271f3b745")
+        self.assertEqual(make_uid(first, 0), "f2c72f0a80b79216bf15661521620693")
 
-    def test_uid_uses_detected_pool_group_id(self):
+    def test_uid_uses_pool_timestamp_and_ordinal_only(self):
         row = {
             "pool_group_id": "Lottery_LimitedCharacter",
             "timestamp_raw_hex": "40e93247c3097b23",
@@ -310,7 +310,18 @@ class BoundaryExportTests(unittest.TestCase):
             "reward_key_hex": "10a58d957dd1a58dad95d17dc1c800",
             "quantity": 50,
         }
-        self.assertNotEqual(make_uid(row, 0), "5adcf52282e15445466863b271f3b745")
+        changed_content = {
+            **row,
+            "dice": 1,
+            "reward_key_hex": "98bdc9ad7dd9a5b99501",
+            "quantity": 1,
+        }
+        changed_pool = {**row, "pool_group_id": "Lottery_Permanent"}
+
+        self.assertEqual(make_uid(row, 0), "74a9ef4aacde549dfe8e8e7cc6ddd65b")
+        self.assertEqual(make_uid(changed_content, 0), make_uid(row, 0))
+        self.assertNotEqual(make_uid(changed_pool, 0), make_uid(row, 0))
+        self.assertNotEqual(make_uid(row, 1), make_uid(row, 0))
 
     def test_pages_1_to_5_exports_every_row(self):
         rows = load_reference_csv("monopoly_history_poc_13_pages_1_to_5_v4.csv")
@@ -592,7 +603,7 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded["dice_raw_u32"], -4)
         self.assertEqual(decoded["reward_id"], "Dice_ticket_01")
         self.assertEqual(decoded["quantity"], 30)
-        self.assertEqual(make_uid(decoded, int(reference["timestamp_group_ordinal"])), "7d035ec098f856f81b403ea538810145")
+        self.assertEqual(make_uid(decoded, int(reference["timestamp_group_ordinal"])), "23dc293f39f18e94a81ccaaf7e1a67eb")
 
     def test_warp_piece_chase_subrecord_without_prefix_marker_is_chase_reward(self):
         decoded = decode_single_record(
@@ -607,6 +618,32 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decoded["reward_id"], "Dice_ticket_01")
         self.assertEqual(decoded["reward_name"], "Warp Piece")
         self.assertEqual(decoded["quantity"], 30)
+
+    def test_page_first_prefix_uses_real_dice_field(self):
+        cases = [
+            (
+                "003006000014000000040000002800000098bdc9ad7dd9a5b995010000000008000000"
+                "3c00000010a58d957dd1a58dad95d17dc1c4002800000098bdc9ad7dd9a5b995014c"
+                "0000000c85c99141bdbdb17d0da185c9858dd195c901c0dd53bd2b137b23",
+                1,
+                "fork_vine",
+            ),
+            (
+                "00c8060000140000001000000014000000c4c0d4d400000000000400000014000000"
+                "c4c0d4d400440000000c85c99141bdbdb17d3995dd49bdb1950100d929e115087b23",
+                4,
+                "1055",
+            ),
+        ]
+        for record_hex, expected_dice, reward_id in cases:
+            with self.subTest(reward_id=reward_id):
+                decoded = decode_single_record(record_hex)
+
+                self.assertEqual(decoded["dice"], expected_dice)
+                self.assertEqual(decoded["dice_raw_u32"], expected_dice * 4)
+                self.assertEqual(decoded["dice_offset_in_record"], 9)
+                self.assertEqual(decoded["result_type"], "dice")
+                self.assertEqual(decoded["reward_id"], reward_id)
 
     def test_batched_monopoly_response_normalizes_embedded_page_header(self):
         page_7 = [load_v7_row("limited_all_04_v7.csv", row) for row in range(31, 36)]
@@ -626,7 +663,7 @@ class BoundaryExportTests(unittest.TestCase):
 
         self.assertEqual(len(decoded), 10)
         self.assertEqual(decoded[5]["reward_id"], page_8[0]["reward_id"])
-        self.assertEqual(decoded[5]["dice"], 5)
+        self.assertEqual(decoded[5]["dice"], 4)
         self.assertEqual(decoded[5]["result_type"], "dice")
         self.assertEqual(decoded[5]["record_hex"], page_8[0]["record_hex"])
 
@@ -665,10 +702,7 @@ class BoundaryExportTests(unittest.TestCase):
         self.assertEqual(decode_arc_key(bytes.fromhex(row["arc_key_hex"])), "fork_nonos")
         _ticks, _unix, decoded = decode_arc_timestamp(bytes.fromhex(row["timestamp_raw_hex"]))
         self.assertEqual(decoded, "2026-06-10 23:46:29")
-        self.assertEqual(
-            make_arc_uid(row["timestamp_raw_hex"], int(row["timestamp_group_ordinal"]), row["arc_key_hex"]),
-            row["uid"],
-        )
+        self.assertEqual(make_arc_uid(row["timestamp_raw_hex"], int(row["timestamp_group_ordinal"])), "4435d9729fa8fd0eaf1b1ad7aa4d2172")
 
     def test_arc_response_parser_matches_reference_first_page(self):
         reference_rows = load_arc_csv("arc_pull_10_all_pages_v2.csv")[:5]

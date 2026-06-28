@@ -14,9 +14,6 @@ def make_uid(record: dict[str, Any], ordinal: int) -> str:
             str(record.get("pool_group_id", BANNER_ID)),
             str(record.get("timestamp_raw_hex", "")),
             str(ordinal),
-            str(record.get("dice", "")),
-            str(record.get("reward_key_hex", "")),
-            str(record.get("quantity", "")),
         ]
     )
     return hashlib.sha256(source.encode("utf-8")).hexdigest()[:32]

@@ -25,6 +25,9 @@ Decoded fields:
 
 - `roll_result = first u32 / 4`
 - `roll_result = 0` means Points Gift
+- Some page-first records include a one-byte page prefix and an extra `0x14`
+  field before the real dice u32. In that shape, the real dice u32 is at offset
+  9 within the record chunk, not the earlier `0x14` field.
 - Some page-first records have a short prefix before the record body. For these, a hidden signed source flag immediately after the visible dice field overrides the visible dice:
   - `source_flag = 0` means Points Gift
   - `source_flag = -4` means Chase Reward
