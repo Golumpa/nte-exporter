@@ -146,8 +146,8 @@ def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
     return rows
 
 
-def make_arc_uid(timestamp_raw: str, ordinal: int, arc_key_hex: str) -> str:
-    source = "|".join([GAME_UID_PART, ARC_SYSTEM, ARC_BANNER_ID, timestamp_raw, str(ordinal), arc_key_hex])
+def make_arc_uid(timestamp_raw: str, ordinal: int) -> str:
+    source = "|".join([GAME_UID_PART, ARC_SYSTEM, ARC_BANNER_ID, timestamp_raw, str(ordinal)])
     return hashlib.sha256(source.encode("utf-8")).hexdigest()[:32]
 
 
@@ -165,7 +165,7 @@ def annotate_arc_groups(rows: list[dict[str, Any]]) -> None:
             row["timestamp_group_index"] = group_index
             row["timestamp_group_ordinal"] = ordinal
             row["timestamp_group_size_seen"] = len(indexes)
-            row["uid"] = make_arc_uid(timestamp_raw, ordinal, row["reward_key_hex"])
+            row["uid"] = make_arc_uid(timestamp_raw, ordinal)
             row["uid_status"] = "stable"
             row["export_record"] = True
             row["skip_reason"] = ""
