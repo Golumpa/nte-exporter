@@ -5,7 +5,7 @@
 Build the Windows console executable with:
 
 ```powershell
-.\tools\build-windows.ps1
+.\tools\build-windows.cmd
 ```
 
 The output is:
