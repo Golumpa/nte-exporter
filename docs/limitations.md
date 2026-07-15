@@ -13,6 +13,9 @@ Known limitations:
 - Structured Monopoly and Arc blocks are parsed in enrichment/fallback mode.
   The existing decoder remains authoritative when structured rows do not agree
   on record count, reward ID, and timestamp.
+- Structured snapshot/segment assembly is limited to runs where every decoded
+  row came from structured fallback. Existing primary-decoder runs are never
+  reordered. Ambiguous generations retain the last proven snapshot.
 - Live capture prefers Npcap on Windows and automatically falls back to the built-in raw-socket backend if Npcap is unavailable. Linux and macOS require the system libpcap runtime.
 - The file adapter reads mitmproxy `.flows` captures for research and testing.
 - Npcap is Windows-only and is not redistributed with this project; Linux and macOS use their system libpcap.

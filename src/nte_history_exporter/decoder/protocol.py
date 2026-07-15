@@ -368,7 +368,7 @@ def _reward_metadata(reward_id: str) -> dict[str, Any]:
     return next((meta for item_id, meta in REWARDS_BY_ID.items() if item_id.casefold() == folded), {})
 
 
-def _structured_monopoly_rows(structured_rows: list[StructuredRecord]) -> list[dict[str, Any]]:
+def structured_monopoly_rows(structured_rows: list[StructuredRecord]) -> list[dict[str, Any]]:
     rows = []
     for row_index, structured in enumerate(structured_rows, start=1):
         dice, dice_raw, result_type, result_source = _structured_result(structured.roll_points_raw)
@@ -405,6 +405,7 @@ def _structured_monopoly_rows(structured_rows: list[StructuredRecord]) -> list[d
                 "secondary_reward_id": structured.secondary_item_id,
                 "secondary_quantity": structured.secondary_count,
                 "structured_protocol_view": structured.protocol_view,
+                "structured_generation_index": structured.generation_index,
             }
         )
     return rows
@@ -425,4 +426,4 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
             break
     if heuristic_rows:
         return _enrich_heuristic_rows(heuristic_rows, structured_rows)
-    return _structured_monopoly_rows(structured_rows)
+    return structured_monopoly_rows(structured_rows)

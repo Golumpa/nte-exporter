@@ -21,8 +21,29 @@ The structured parser is deliberately compatibility-gated:
 - Malformed, incomplete, mismatched, or ambiguous structured data is ignored;
   it cannot overwrite a successfully decoded primary row.
 
+Structured protocol envelopes identify a history stream, page, query side, and
+segment index. For an all-structured fallback run, the snapshot assembler:
+
+- orders segments by their protocol index while retaining row order inside
+  every segment;
+- ignores exact retransmissions;
+- starts a new generation when an existing segment index changes;
+- replaces an older snapshot only when the new generation covers at least the
+  same segment range;
+- merges a partial generation only when its suffix has one unique overlap with
+  the proven snapshot; and
+- retains the proven snapshot and records an assembly warning when a merge is
+  ambiguous.
+
+Assembly never runs on a history run containing a successfully decoded primary
+row. Such runs retain their existing packet/page order exactly. Timestamp-group
+ordinals and UIDs are calculated only after any fallback assembly, using the
+same inputs and algorithms as before.
+
 `decoder_mode`, `structured_protocol_view`, `structured_pool_id`,
-`secondary_reward_id`, and `secondary_quantity` are research/debug CSV fields.
+`structured_generation_index`, `structured_assembly`,
+`structured_assembly_warning_count`, `secondary_reward_id`, and
+`secondary_quantity` are research/debug CSV fields.
 They are intentionally omitted from the public JSON export, whose format stays
 at version 1.
 
