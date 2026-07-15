@@ -10,6 +10,9 @@ Known limitations:
 - A partially captured oldest timestamp group is still exported; its captured prefix has stable UIDs, and a later deeper scan adds the rest with the same UIDs.
 - Pages are anchored to the continuous run starting at page 1. Live capture reports gaps immediately and accepts replacement pages from another pass while the exporter remains open. Scrolling backward does not request cached pages again, so close and reopen the history board before rescanning. Any gap left when capture ends causes later pages to be ignored and reported as warnings.
 - Pipelined page requests and multi-page responses are supported, including observed 10-record responses containing two consecutive Monopoly pages. Non-byte-aligned response payloads are realigned before decoding.
+- Structured Monopoly and Arc blocks are parsed in enrichment/fallback mode.
+  The existing decoder remains authoritative when structured rows do not agree
+  on record count, reward ID, and timestamp.
 - Live capture prefers Npcap on Windows and automatically falls back to the built-in raw-socket backend if Npcap is unavailable. Linux and macOS require the system libpcap runtime.
 - The file adapter reads mitmproxy `.flows` captures for research and testing.
 - Npcap is Windows-only and is not redistributed with this project; Linux and macOS use their system libpcap.

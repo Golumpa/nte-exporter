@@ -196,7 +196,7 @@ jobs:
                 echo "$description" | sed 's/^/    /'
               fi
               echo
-            done < <(git rev-list "$commit_range")
+            done < <(git rev-list --no-merges "$commit_range")
           } > release-notes.md
 
       - name: Download Artifacts

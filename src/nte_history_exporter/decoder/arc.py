@@ -22,6 +22,7 @@ from nte_history_exporter.constants import (
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.run import fmt_packet_time
 from nte_history_exporter.mappings import ARC_META
+from nte_history_exporter.decoder.structured_protocol import StructuredRecord, parse_structured_records
 
 
 def is_arc_history_request(content: bytes) -> bool:
@@ -61,7 +62,7 @@ def decode_arc_timestamp(raw8: bytes) -> tuple[int, float, str]:
     return ticks, unix_seconds, decoded
 
 
-def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
+def _parse_legacy_arc_response(response: bytes) -> list[dict[str, Any]]:
     pos = ARC_RESPONSE_FIRST_RECORD_OFFSET
     records: list[dict[str, Any]] = []
     while pos + 4 <= len(response):
@@ -114,6 +115,68 @@ def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
             }
         )
     return records
+
+
+def _arc_metadata(arc_id: str) -> dict[str, Any]:
+    direct = ARC_META.get(arc_id)
+    if direct is not None:
+        return direct
+    folded = arc_id.casefold()
+    return next((meta for item_id, meta in ARC_META.items() if item_id.casefold() == folded), {})
+
+
+def _structured_arc_rows(structured_rows: list[StructuredRecord]) -> list[dict[str, Any]]:
+    records = []
+    for structured in structured_rows:
+        meta = _arc_metadata(structured.item_id)
+        records.append(
+            {
+                "record_start": structured.record_start,
+                "record_end": structured.record_end,
+                "record_len": structured.record_end - structured.record_start,
+                "reward_key_hex": "",
+                "reward_type": "arc",
+                "reward_id": structured.item_id,
+                "reward_name": meta.get("name", "UNKNOWN"),
+                "reward_rank": meta.get("rank", ""),
+                "type_key_hex": "",
+                "source_type": "miracle_box",
+                "timestamp_raw_hex": structured.ticks.to_bytes(8, "little").hex(),
+                "timestamp_ticks": structured.ticks,
+                "timestamp_unix": structured.timestamp_unix,
+                "timestamp_decoded": structured.timestamp_decoded,
+                "record_hex": structured.record_hex,
+                "decoder_mode": "structured_fallback",
+                "structured_pool_id": structured.pool_id,
+                "structured_protocol_view": structured.protocol_view,
+            }
+        )
+    return records
+
+
+def _enrich_legacy_arc_rows(
+    legacy_rows: list[dict[str, Any]], structured_rows: list[StructuredRecord]
+) -> list[dict[str, Any]]:
+    if len(legacy_rows) != len(structured_rows):
+        return legacy_rows
+    for legacy, structured in zip(legacy_rows, structured_rows):
+        if legacy.get("reward_id", "").casefold() != structured.item_id.casefold():
+            return legacy_rows
+        if legacy.get("timestamp_ticks") not in {structured.ticks, structured.ticks * 2}:
+            return legacy_rows
+    for legacy, structured in zip(legacy_rows, structured_rows):
+        legacy["decoder_mode"] = "heuristic_enriched"
+        legacy["structured_pool_id"] = structured.pool_id
+        legacy["structured_protocol_view"] = structured.protocol_view
+    return legacy_rows
+
+
+def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
+    structured_rows = parse_structured_records(response, "fork")
+    legacy_rows = _parse_legacy_arc_response(response)
+    if legacy_rows:
+        return _enrich_legacy_arc_rows(legacy_rows, structured_rows)
+    return _structured_arc_rows(structured_rows)
 
 
 def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:

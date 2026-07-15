@@ -2,6 +2,30 @@
 
 This prototype supports separate Monopoly and Arc/Gashapon history decoders.
 
+## Decoder strategy
+
+Both history paths now recognize the structured `FMonopolyLotteryRecordData`
+and `FForkLotteryRecordData` blocks, including blocks packed at a non-byte
+alignment. Structured fields include the item/count pair, pool ID, secondary
+reward data, roll result, and standard .NET timestamp.
+
+The structured parser is deliberately compatibility-gated:
+
+- The established decoder remains the primary path.
+- Structured rows enrich primary rows only when row count, reward ID, and raw
+  timestamp agree. Enrichment supplies exact quantities, missing roll details,
+  pool diagnostics, and secondary reward diagnostics.
+- If the primary decoder returns no records but a complete structured block is
+  valid, the structured records are converted into the same internal row shape
+  as a fallback.
+- Malformed, incomplete, mismatched, or ambiguous structured data is ignored;
+  it cannot overwrite a successfully decoded primary row.
+
+`decoder_mode`, `structured_protocol_view`, `structured_pool_id`,
+`secondary_reward_id`, and `secondary_quantity` are research/debug CSV fields.
+They are intentionally omitted from the public JSON export, whose format stays
+at version 1.
+
 ## Monopoly
 
 - History is fetched over the UDP game connection.

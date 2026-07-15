@@ -3,7 +3,7 @@
 `tools/update_mappings.py` rebuilds `arcs.json`, `characters.json`, and
 `items.json` directly from the current
 [`Waifus-Grace/NTE_Assets`](https://github.com/Waifus-Grace/NTE_Assets)
-tables. No other exporter or intermediate mapping format is used.
+tables.
 
 English display names come from `Localization/en/game.json`. The data tables
 provide localization namespace/key references and quality metadata; their
