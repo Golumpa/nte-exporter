@@ -1,0 +1,18 @@
+{
+  "ST_Player": {
+    "character_1003": "Old Character Renamed",
+    "character_1099": "New Character"
+  },
+  "ST_Fork": {
+    "fork_alpha_name": "Alpha Arc",
+    "fork_new_name": "New Arc"
+  },
+  "ST_Item": {
+    "dice_normal": "Fabricated Dice",
+    "ticket_03": "New Ticket",
+    "unused_item": "Not A Pull Reward"
+  },
+  "ST_Appearance": {
+    "glider_2000": "Inventory Glider"
+  }
+}

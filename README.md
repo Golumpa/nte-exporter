@@ -163,6 +163,26 @@ The exporter automatically includes the shareable NTE user UID when it appears i
 > [!TIP]
 > For reliable deduplication, start from page 1 and scroll through the pages. If you only want pages 1–5, scroll through to page 6 as well just to be on the safe side.
 
+## Mapping maintenance
+
+Reward metadata can be rebuilt directly from the latest NTE_Assets tables and
+English translation files. The reward snapshot may change IDs while UID inputs
+remain untouched:
+
+Run **Update reward mappings** from the GitHub Actions tab to generate and test
+the snapshot in a reviewable pull request, or run it locally:
+
+```powershell
+python tools/update_mappings.py
+```
+
+This rebuilds reviewable reward-map candidates directly from NTE_Assets under
+`build/mapping-update/`; committed mappings are untouched unless `--apply` is
+explicitly supplied. The snapshot may include additions, updates, and removals,
+while pool mappings and UID inputs remain untouched. See
+[Reward mapping updates](docs/mapping-updates.md) for the source rules and
+review workflow.
+
 ## Privacy
 
 > [!CAUTION]

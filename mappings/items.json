@@ -1,26 +1,25 @@
 {
-  "DiceNormal": {"type": "item", "name": "Fabricated Dice", "rank": "S"},
   "Dice_ticket_01": {"type": "item", "name": "Warp Piece", "rank": "S"},
   "Dice_ticket_02": {"type": "item", "name": "Lost Piece", "rank": "A"},
   "Dicelimite": {"type": "item", "name": "Solid Dice", "rank": "S"},
-  
-  "Fashion_Glide_1010": {"type": "cosmetic", "name": "Glider - Underboss-of-the-Underboss", "rank": "A"},
-  "Fashion_vehicle_1010_V008": {"type": "cosmetic", "name": "Mod Parts - Tiger Incoming! - Livery", "rank": "S"},
-  "Fashion_character_1010": {"type": "cosmetic", "name": "Character Skin - Phoenix Kick", "rank": "S"},
-  
-  "Fashion_Glide_1052": {"type": "cosmetic", "name": "Glider - Orchid Breeze", "rank": "A"},
-  "Fashion_vehicle_1052_V024": {"type": "cosmetic", "name": "Mod Parts - Autumn Haze - Livery", "rank": "S"},
-  "Fashion_character_1052_01": {"type": "cosmetic", "name": "Character Skin - Priceless Orchid", "rank": "S"},
-  
-  "Fashion_Glide_1004": {"type": "cosmetic", "name": "Glider - Tomato Duo", "rank": "A"},
-  "Fashion_vehicle_1004_V021": {"type": "cosmetic", "name": "Mod Parts - Tomato Cruise - Livery", "rank": "S"},
-  "Fashion_character_1004_01": {"type": "cosmetic", "name": "Character Skin - Gilded Rhapsody", "rank": "S"},
-  
-  "Fashion_Glide_1071": {"type": "cosmetic", "name": "Glider - Skyrider", "rank": "A"},
-  "Fashion_vehicle_1071_V010": {"type": "cosmetic", "name": "Mod Parts - Novis ST-X 950 - Livery", "rank": "S"},
-  "Fashion_character_1071_01": {"type": "cosmetic", "name": "Character Skin - Clear Skies", "rank": "S"},
-  
-  "Fashion_Glide_1076": {"type": "cosmetic", "name": "Glider - Overcast Canopy", "rank": "A"},
-  "Fashion_vehicle_1076_V024": {"type": "cosmetic", "name": "Mod Parts - Hidden Dragon - Livery", "rank": "S"},
-  "Fashion_character_1076_01": {"type": "cosmetic", "name": "Character Skin - Student of Terrasea", "rank": "S"}
+  "DiceNormal": {"type": "item", "name": "Fabricated Dice", "rank": "S"},
+  "Fashion_character_1004_01": {"type": "cosmetic", "name": "Gilded Rhapsody", "rank": "S"},
+  "Fashion_character_1010": {"type": "cosmetic", "name": "Phoenix Kick", "rank": "S"},
+  "Fashion_character_1052_01": {"type": "cosmetic", "name": "Priceless Orchid", "rank": "S"},
+  "Fashion_character_1071_01": {"type": "cosmetic", "name": "Clear Skies", "rank": "S"},
+  "Fashion_character_1075_01": {"type": "cosmetic", "name": "Summer Dream", "rank": "S"},
+  "Fashion_character_1076_01": {"type": "cosmetic", "name": "Student of Terrasea", "rank": "S"},
+  "Fashion_Glide_1004": {"type": "cosmetic", "name": "Tomato Duo", "rank": "A"},
+  "Fashion_Glide_1010": {"type": "cosmetic", "name": "Underboss-of-the-Underboss", "rank": "A"},
+  "Fashion_Glide_1052": {"type": "cosmetic", "name": "Orchid Breeze", "rank": "A"},
+  "Fashion_Glide_1071": {"type": "cosmetic", "name": "Skyrider", "rank": "A"},
+  "Fashion_glide_1075": {"type": "cosmetic", "name": "Skyrider", "rank": "A"},
+  "Fashion_Glide_1076": {"type": "cosmetic", "name": "Overcast Canopy", "rank": "A"},
+  "Fashion_vehicle_1004_V021": {"type": "cosmetic", "name": "Tomato Cruise - Livery", "rank": "S"},
+  "Fashion_vehicle_1010_V008": {"type": "cosmetic", "name": "Tiger Incoming! - Livery", "rank": "S"},
+  "Fashion_vehicle_1052_V024": {"type": "cosmetic", "name": "Autumn Haze - Livery", "rank": "S"},
+  "Fashion_vehicle_1071_V010": {"type": "cosmetic", "name": "Hound Blitz - Livery", "rank": "S"},
+  "Fashion_vehicle_1075_V006": {"type": "cosmetic", "name": "Hidden Dragon - Livery", "rank": "S"},
+  "Fashion_vehicle_1076_V024": {"type": "cosmetic", "name": "Hidden Dragon - Livery", "rank": "S"},
+  "Fashion_vehicleSkin_1052_V016": {"type": "cosmetic", "name": "Golden Breeze - Livery", "rank": "S"}
 }
