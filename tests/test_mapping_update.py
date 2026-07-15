@@ -72,6 +72,51 @@ class MappingUpdateTests(unittest.TestCase):
         self.assertNotIn("UnusedItem", result.mappings["items.json"])
         self.assertFalse(any(key.startswith("Characterawaken_") for key in result.mappings["items.json"]))
 
+    def test_future_mystery_box_pool_is_discovered_without_hard_coded_event_id(self):
+        assets = load_assets(assets_root=SAMPLE_ASSETS)
+        tables = deepcopy(assets.tables)
+        tables["mystery_box_pools"]["MangHe_wowzers"] = {
+            "GiftList": [
+                {"ItemID": "WowTicket"},
+                {"ItemID": "Frame_Wowzers"},
+                {"ItemID": "VehicleWow"},
+            ]
+        }
+        tables["inventory"]["WowTicket"] = {
+            "ItemName": {"TableId": "/Game/Text/ST_Item.ST_Item", "Key": "wow_ticket"},
+            "ItemQuality": "EItemQuality::ITEM_QUALITY_PURPLE",
+        }
+        tables["inventory"]["Frame_Wowzers"] = {
+            "ItemName": {"TableId": "/Game/Text/ST_Item.ST_Item", "Key": "wow_frame"},
+            "ItemQuality": "EItemQuality::ITEM_QUALITY_BLUE",
+        }
+        tables["vehicle_inventory"]["vehiclewow"] = {
+            "ItemName": {
+                "TableId": "/Game/Text/ST_VehicleData.ST_VehicleData",
+                "Key": "vehicle_wow",
+            },
+            "ItemQuality": "EItemQuality::ITEM_QUALITY_ORANGE",
+        }
+        tables["localization"]["ST_Item"].update(
+            {"wow_ticket": "Wowzers Ticket", "wow_frame": "Wowzers Frame"}
+        )
+        tables["localization"]["ST_VehicleData"] = {"vehicle_wow": "Wowmobile"}
+
+        result = build_mapping_update(sample_current(), replace(assets, tables=tables))
+
+        self.assertEqual(
+            result.mappings["items.json"]["WowTicket"],
+            {"type": "item", "name": "Wowzers Ticket", "rank": "A"},
+        )
+        self.assertEqual(
+            result.mappings["items.json"]["Frame_Wowzers"],
+            {"type": "cosmetic", "name": "Wowzers Frame", "rank": "B"},
+        )
+        self.assertEqual(
+            result.mappings["items.json"]["vehiclewow"],
+            {"type": "item", "name": "Wowmobile", "rank": "S"},
+        )
+
     def test_embedded_localized_strings_are_ignored(self):
         _current, result = build_sample_update()
 

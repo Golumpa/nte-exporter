@@ -58,6 +58,7 @@ FIELDNAMES = [
     "record_len",
     "dice_offset_in_record",
     "record_hex",
+    "record_flag",
 ]
 
 

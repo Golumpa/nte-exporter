@@ -20,7 +20,15 @@ from nte_history_exporter.decoder.protocol import (
     response_contains_history_marker,
 )
 from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.decoder.mystery_box import (
+    build_mystery_box_rows_from_pairs,
+    is_mystery_box_history_request,
+    mystery_box_request_page,
+    parse_mystery_box_response,
+    select_continuous_mystery_box_run,
+)
 from nte_history_exporter.decoder.structured_protocol import FORK_MARKER, MONOPOLY_MARKER
+from nte_history_exporter.constants import MYSTERY_BOX_MARKER
 from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
 from nte_history_exporter.live_capture.diagnostics import CaptureDiagnostics
 
@@ -165,6 +173,30 @@ class LiveHistorySession:
             self.last_page_seen = req.page
             return False
 
+        if packet.src_ip == self.local_ip and is_mystery_box_history_request(packet.payload):
+            page = mystery_box_request_page(packet.payload)
+            req = PendingRequest(
+                page=page,
+                offset=page * 2,
+                kind="mystery_box",
+                request_msg=self.packet_count,
+                request_time=packet.timestamp,
+                src_ip=packet.src_ip,
+                dst_ip=packet.dst_ip,
+                src_port=packet.src_port,
+                dst_port=packet.dst_port,
+            )
+            self._queue_request(req)
+            self.diagnostics.counters["history_requests_recognized"] += 1
+            self.diagnostics.add_event(
+                "HISTORY_REQUEST_RECOGNIZED",
+                self.packet_count,
+                kind=req.kind,
+                page=req.page,
+            )
+            self.last_page_seen = req.page
+            return False
+
         if packet.dst_ip != self.local_ip:
             return False
 
@@ -191,12 +223,24 @@ class LiveHistorySession:
 
         monopoly_records = decode_response_records(packet.payload)
         arc_records = parse_arc_response(packet.payload) if not monopoly_records else []
+        mystery_box_records = (
+            parse_mystery_box_response(packet.payload)
+            if not monopoly_records and not arc_records
+            else []
+        )
         if monopoly_records:
-            candidates = [req for req in connection_candidates if req.kind != "arc_miracle_box"]
+            candidates = [
+                req
+                for req in connection_candidates
+                if req.kind not in {"arc_miracle_box", "mystery_box"}
+            ]
             records = monopoly_records
         elif arc_records:
             candidates = [req for req in connection_candidates if req.kind == "arc_miracle_box"]
             records = arc_records
+        elif mystery_box_records:
+            candidates = [req for req in connection_candidates if req.kind == "mystery_box"]
+            records = mystery_box_records
         else:
             candidates = connection_candidates
             records = []
@@ -215,6 +259,7 @@ class LiveHistorySession:
                 if response_contains_history_marker(packet.payload)
                 or MONOPOLY_MARKER in packet.payload
                 or FORK_MARKER in packet.payload
+                or MYSTERY_BOX_MARKER in packet.payload
                 else "NO_HISTORY_MARKER"
             )
             self._record_rejected_candidate(candidates, packet.payload, reason)
@@ -340,6 +385,9 @@ class LiveHistorySession:
         if kind == "arc_miracle_box":
             best_run, _warnings = select_continuous_arc_run(self.pairs_for_kind(kind))
             return build_arc_rows_from_pairs(best_run)
+        if kind == "mystery_box":
+            best_run, _warnings = select_continuous_mystery_box_run(self.pairs_for_kind(kind))
+            return build_mystery_box_rows_from_pairs(best_run)
         return build_rows_from_pairs(self.best_run(kind))
 
     def best_run(self, kind: str | None = None) -> list[tuple]:

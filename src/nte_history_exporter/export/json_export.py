@@ -9,6 +9,7 @@ from nte_history_exporter.constants import (
     EXPORTER_NAME,
     GAME_NAME,
     POOL_META,
+    MYSTERY_BOX_BANNER_ID,
 )
 
 
@@ -80,6 +81,21 @@ def _record_for_export(row: dict[str, Any]) -> dict[str, Any]:
             "reward_id": row.get("reward_id"),
             "reward_name": row.get("reward_name"),
             "reward_rank": row.get("reward_rank"),
+            "source_type": row.get("source_type"),
+        }
+
+    if row.get("pool_group_id") == MYSTERY_BOX_BANNER_ID:
+        return {
+            "uid": row.get("uid"),
+            "pool_group_id": row.get("pool_group_id"),
+            "timestamp": row.get("timestamp_decoded"),
+            "timestamp_group_ordinal": row.get("timestamp_group_ordinal"),
+            "result_type": "single_pull",
+            "reward_type": row.get("reward_type"),
+            "reward_id": row.get("reward_id"),
+            "reward_name": row.get("reward_name"),
+            "reward_rank": row.get("reward_rank"),
+            "quantity": row.get("quantity"),
             "source_type": row.get("source_type"),
         }
 

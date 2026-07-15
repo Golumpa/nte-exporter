@@ -23,6 +23,7 @@ EXPORT_PREFIXES = {
     "permanent": "Permanent",
     "limited_character": "Limited",
     "arc_miracle_box": "Arc",
+    "mystery_box": "MysteryBox",
 }
 
 CAPTURE_SOURCE_LABELS = {
@@ -148,7 +149,7 @@ def run_live_capture(
         pairs = session.pairs_for_kind(kind)
         best_run, run_warnings = select_continuous_run_from_page_1(pairs)
         rows = session.build_rows(kind)
-        if kind != "arc_miracle_box":
+        if kind not in {"arc_miracle_box", "mystery_box"}:
             rows = annotate_groups(rows)
         warnings = run_warnings
         pages_seen = [p[0] for p in best_run]

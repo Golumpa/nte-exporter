@@ -66,7 +66,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)
-    if decoded["arc_rows"] and not decoded["rows"]:
+    if decoded["mystery_box_rows"] and not decoded["rows"] and not decoded["arc_rows"]:
+        rows = decoded["mystery_box_rows"]
+        warnings = decoded["mystery_box_warnings"]
+        kind = "mystery_box"
+        best_run = decoded["best_mystery_box_run"]
+        pair_count = len(decoded["mystery_box_pairs"])
+    elif decoded["arc_rows"] and not decoded["rows"]:
         rows = decoded["arc_rows"]
         warnings = decoded["arc_warnings"]
         kind = "arc_miracle_box"

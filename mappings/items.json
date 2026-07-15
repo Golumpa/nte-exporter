@@ -21,5 +21,20 @@
   "Fashion_vehicle_1071_V010": {"type": "cosmetic", "name": "Hound Blitz - Livery", "rank": "S"},
   "Fashion_vehicle_1075_V006": {"type": "cosmetic", "name": "Hidden Dragon - Livery", "rank": "S"},
   "Fashion_vehicle_1076_V024": {"type": "cosmetic", "name": "Hidden Dragon - Livery", "rank": "S"},
-  "Fashion_vehicleSkin_1052_V016": {"type": "cosmetic", "name": "Golden Breeze - Livery", "rank": "S"}
+  "Fashion_vehicleSkin_1052_V016": {"type": "cosmetic", "name": "Golden Breeze - Livery", "rank": "S"},
+  "vehicle039": {"type": "item", "name": "Draco", "rank": "S"},
+  "Fashion_1051_rpg_level3_Dye1": {"type": "cosmetic", "name": "Glory Days - Braveheart", "rank": "S"},
+  "Fashion_1051_rpg_level3_Dye2": {"type": "cosmetic", "name": "Glory Days - Starfall", "rank": "S"},
+  "Fashion_1051_rpg_level3_Base": {"type": "cosmetic", "name": "Glory Days", "rank": "S"},
+  "SpecialGift_ticket": {"type": "item", "name": "Floe Cinema Ticket", "rank": "A"},
+  "Fons": {"type": "item", "name": "Fons", "rank": "A"},
+  "CharacterUpMaterial_lv3": {"type": "item", "name": "Elite Hunter Guide", "rank": "A"},
+  "Gold": {"type": "item", "name": "Beetle Coin", "rank": "B"},
+  "CityAbility_UpMaterial": {"type": "item", "name": "Dreamless Seed", "rank": "B"},
+  "SpecialGift_letter": {"type": "item", "name": "A Handwritten Letter", "rank": "S"},
+  "Frame_MangHe_shinku": {"type": "cosmetic", "name": "Ember Trail", "rank": "S"},
+  "Fashion_character_1051_07": {"type": "cosmetic", "name": "Perfect Partners", "rank": "S"},
+  "vehicle026": {"type": "item", "name": "Porsche 918 Spyder", "rank": "S"},
+  "Frame_MangHe_bsj": {"type": "cosmetic", "name": "Heartbeat Moment", "rank": "S"},
+  "BussinessCard_MangHe_bsj": {"type": "cosmetic", "name": "Trackside Shadow", "rank": "S"}
 }

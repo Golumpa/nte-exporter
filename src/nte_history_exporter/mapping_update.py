@@ -19,6 +19,8 @@ ASSET_TABLES = {
     "capital_inventory": "DataTable/Inventory/DT_CapitalItemConfig.json",
     "appearances": "DataTable/Character/Appearance/DT_AppearanceData.json",
     "illustrations": "DataTable/Gacha/GachaIllustrate.json",
+    "mystery_box_pools": "DataTable/GashaponLottery/DT_GashaponLotteryGlobal.json",
+    "vehicle_inventory": "DataTable/Vehicle/DT_VehicleItemData.json",
     "localization": "Localization/en/game.json",
 }
 REWARD_MAPPING_FILES = ("arcs.json", "characters.json", "items.json")
@@ -282,25 +284,58 @@ def _build_item_mapping(
     inventory = _casefold_index(tables["inventory"], "inventory")
     capital = _casefold_index(tables["capital_inventory"], "capital inventory")
     appearances = _casefold_index(tables["appearances"], "appearances")
+    vehicle_inventory = _casefold_index(tables["vehicle_inventory"], "vehicle inventory")
     result: dict[str, dict[str, Any]] = {}
-    for illustrated_id in tables["illustrations"]:
-        folded = illustrated_id.casefold()
-        if illustrated_id.isdigit() or folded.startswith("fork_") or folded.startswith("characterawaken_"):
+    candidate_ids = _reward_candidate_ids(tables)
+    for candidate_id in candidate_ids:
+        folded = candidate_id.casefold()
+        if candidate_id.isdigit() or folded.startswith("fork_") or folded.startswith("characterawaken_"):
             continue
-        sources = (inventory, capital, appearances)
+        sources = (inventory, capital, appearances, vehicle_inventory)
         match = next((source.get(folded) for source in sources if folded in source), None)
         if match is None:
-            raise MappingUpdateError(f"illustrated reward {illustrated_id} is missing from item tables")
+            raise MappingUpdateError(f"reward {candidate_id} is missing from item tables")
         canonical_id, row = match
         if folded.startswith("fashion_glide_") and folded in appearances:
             canonical_id = appearances[folded][0]
         meta = _normalise_row(canonical_id, row, translations)
         result[canonical_id] = {
-            "type": "cosmetic" if canonical_id.casefold().startswith("fashion_") else "item",
+            "type": _item_mapping_type(canonical_id),
             "name": meta["name"],
             "rank": meta["rank"],
         }
     return dict(sorted(result.items(), key=lambda pair: (pair[0].casefold(), pair[0])))
+
+
+def _reward_candidate_ids(tables: dict[str, dict[str, Any]]) -> list[str]:
+    """Return rewards used by ordinary Gacha and every Mystery Box rotation."""
+    candidates: dict[str, str] = {
+        item_id.casefold(): item_id for item_id in tables["illustrations"]
+    }
+    for pool_id, pool in tables["mystery_box_pools"].items():
+        if not isinstance(pool, dict):
+            raise MappingUpdateError(f"Mystery Box pool {pool_id} must be an object")
+        gifts = pool.get("GiftList")
+        if not isinstance(gifts, list):
+            raise MappingUpdateError(f"Mystery Box pool {pool_id} has no GiftList")
+        for index, gift in enumerate(gifts):
+            if not isinstance(gift, dict):
+                raise MappingUpdateError(
+                    f"Mystery Box pool {pool_id} gift {index} must be an object"
+                )
+            item_id = gift.get("ItemID")
+            if not isinstance(item_id, str) or not item_id:
+                raise MappingUpdateError(
+                    f"Mystery Box pool {pool_id} gift {index} has no ItemID"
+                )
+            candidates.setdefault(item_id.casefold(), item_id)
+    return sorted(candidates.values(), key=lambda value: (value.casefold(), value))
+
+
+def _item_mapping_type(item_id: str) -> str:
+    folded = item_id.casefold()
+    cosmetic_prefixes = ("fashion_", "frame_", "bussinesscard_")
+    return "cosmetic" if folded.startswith(cosmetic_prefixes) else "item"
 
 
 def _casefold_index(rows: dict[str, Any], label: str) -> dict[str, tuple[str, Any]]:

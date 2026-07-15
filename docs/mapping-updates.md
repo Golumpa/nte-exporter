@@ -76,6 +76,13 @@ from the committed reward mappings. It still writes the staged artifacts.
 - Other pull rewards are selected by `GachaIllustrate` and resolved to the
   inventory tables for quality and localization keys. Appearance-table IDs
   provide canonical casing for glider rewards.
+- Mystery Box rewards are selected from every row in
+  `DT_GashaponLotteryGlobal`. No event IDs are hard-coded, so future rotations
+  are included automatically. Rewards resolve through the inventory, capital,
+  appearance, and vehicle-item tables using case-insensitive IDs.
+- Fashion, avatar-frame, and business-card Mystery Box rewards are categorized
+  as cosmetics; other Mystery Box rewards, including vehicle keys and
+  currencies, are categorized as items.
 - Names are resolved strictly through `Localization/en/game.json`. A missing or
   ambiguous key fails the update instead of falling back to a DT value.
 - Character-awakening illustration entries are not independent pull rewards

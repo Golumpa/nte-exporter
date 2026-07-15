@@ -82,6 +82,7 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
     print(style("         Monopoly  >  Standard Board history", CYAN))
     print(style("         Monopoly  >  Limited Character Board history", CYAN))
     print(style("         Gashapon  >  Arc Miracle Box history", CYAN))
+    print(style("         Gashapon  >  Mystery Box history", CYAN))
     print("    3. Start at page 1 and scroll down through every page")
     print("       you want exported.")
     print("    4. Scroll one page past where you plan to stop so the")

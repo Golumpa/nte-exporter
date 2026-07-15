@@ -1,6 +1,6 @@
 # Packet Format Notes
 
-This prototype supports separate Monopoly and Arc/Gashapon history decoders.
+This prototype supports separate Monopoly, Arc/Gashapon, and Mystery Box history decoders.
 
 ## Decoder strategy
 
@@ -105,3 +105,15 @@ Pages are anchored to the continuous run starting at page 1 (history always load
 - Arc timestamps use `unix_seconds = little_endian_u64(timestamp_raw) / 20000000 - 62135596800`.
 - Arc pulls are treated as 10-pull timestamp groups. Like Monopoly, every captured group is exported, including the oldest one even if the scan stopped mid-10-pull (its captured prefix is ordinal-stable).
 - Arc rows use the same `reward_type`, `reward_id`, `reward_name`, `reward_rank`, and `reward_key_hex` fields as Monopoly rows.
+
+## Mystery Box
+
+- Mystery Box requests use a 54-byte prefix.
+- Request constant: `2060` / `0x080c` at offset 26.
+- Request kind: `2110` / `0x083e` at offset 35.
+- Request cursor: offset 31, with a step of `2`; page is `cursor / 2`.
+- Responses contain an `FGashaponLotteryRecordData` structured block.
+- Each row contains the reward ID, exact quantity, a record flag, and a standard .NET timestamp.
+- Every row is one single pull regardless of its reward quantity.
+- A full response page contains 5 rows; the final page may contain 1–4 rows.
+- History is exported under `Gashapon_MysteryBox` without attempting to infer or split rotations.

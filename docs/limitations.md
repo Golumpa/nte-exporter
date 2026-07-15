@@ -1,10 +1,11 @@
 # Limitations
 
-This is a prototype and supports `Lottery_Permanent`, `Lottery_LimitedCharacter`, and `Arc_MiracleBox`.
+This is a prototype and supports `Lottery_Permanent`, `Lottery_LimitedCharacter`, `Arc_MiracleBox`, and `Gashapon_MysteryBox`.
 
 Known limitations:
 
 - Other NTE banners are not implemented yet.
+- Mystery Box history does not expose a semantic rotation ID in each decoded row. The exporter deliberately keeps one unsplit history stream and leaves rotation grouping to consumers.
 - The game appears not to provide a unique server-side roll ID in the decoded record body.
 - UIDs are generated deterministically from decoded fields and timestamp-group order.
 - A partially captured oldest timestamp group is still exported; its captured prefix has stable UIDs, and a later deeper scan adds the rest with the same UIDs.

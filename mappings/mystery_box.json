@@ -1,0 +1,34 @@
+{
+  "pool_key": "mystery_box",
+  "game": "Neverness to Everness",
+  "system": {
+    "id": "gashapon",
+    "name": "Gashapon"
+  },
+  "banner": {
+    "id": "Gashapon_MysteryBox",
+    "name": "Mystery Box",
+    "shared_pity": false
+  },
+  "request": {
+    "family": "mystery_box",
+    "length": 54,
+    "constant": 2060,
+    "constant_offset": 26,
+    "request_kind": 2110,
+    "request_kind_offset": 35,
+    "cursor_offset": 31,
+    "cursor_step": 2,
+    "page_formula": "cursor / 2"
+  },
+  "response": {
+    "records_per_full_page": 5,
+    "marker": "FGashaponLotteryRecordData",
+    "pulls_per_record": 1,
+    "final_page_may_be_partial": true
+  },
+  "notes": [
+    "Mystery Box is a finite 15-draw prize pool whose rewards are removed as they are drawn.",
+    "History is exported as one pull per record and is not split into rotations by the exporter."
+  ]
+}

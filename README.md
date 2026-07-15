@@ -19,10 +19,11 @@ Prototype CLI exporter for **Neverness to Everness** pull history — decodes yo
 | Monopoly | Standard Board          | `Lottery_Permanent`        | Per-banner |
 | Monopoly | Limited Character Board | `Lottery_LimitedCharacter` | Shared     |
 | Gashapon | Arc Miracle Box         | `Arc_MiracleBox`           | Shared     |
+| Gashapon | Mystery Box             | `Gashapon_MysteryBox`      | Per-rotation |
 
 ## What It Does
 
-The exporter decodes Permanent Board, Limited Character Board, and Arc Miracle Box history pages from captured UDP data, applies conservative timestamp-boundary handling, and writes sanitized JSON suitable for tracker import.
+The exporter decodes Permanent Board, Limited Character Board, Arc Miracle Box, and Mystery Box history pages from captured UDP data, applies conservative timestamp-boundary handling, and writes sanitized JSON suitable for tracker import.
 
 > [!NOTE]
 > The import JSON contains decoded history rows and the shareable NTE user UID when it can be detected. It does **not** export tokens, account IDs, role IDs, device IDs, server IPs, raw packets, cookies, session data, or other capture metadata.
@@ -96,6 +97,7 @@ Once running, open any supported history board in game. The tool keeps listening
 - `<user_uid>_Permanent_<date_time>.json`
 - `<user_uid>_Limited_<date_time>.json`
 - `<user_uid>_Arc_<date_time>.json`
+- `<user_uid>_MysteryBox_<date_time>.json`
 
 If the user UID is not detected automatically, the console asks for it before saving. Leaving it blank saves as `unknown_<banner>_<date_time>.json`, but may prevent import on some trackers.
 
@@ -199,7 +201,7 @@ History always loads page 1 first and is scrolled downward, so the exporter anch
 
 Within a timestamp group, ordinal 0 is the newest record and unseen rows can only append after the captured ones, so **every exported UID is stable** — including a partially captured oldest 10-pull. All decoded rows are therefore exported. Re-scanning later simply adds any rows that were not yet captured, with the same UIDs for the rows already seen.
 
-For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls. In both systems every captured group is exported, including the oldest one even if it is a partially captured pull set, because its captured prefix is ordinal-stable.
+For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls. Mystery Box records are single pulls and the final page may contain fewer than five records. Every captured group is exported, including an incomplete oldest pull set, because its captured prefix is ordinal-stable.
 
 ## Adapters
 
