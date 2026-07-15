@@ -60,6 +60,34 @@ def load_network_fixture():
         return json.load(f)
 
 
+def load_capture_diagnostics_fixture():
+    path = FIXTURES / "synthetic_capture_diagnostics.json"
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def diagnostic_fixture_session():
+    fixture = load_capture_diagnostics_fixture()
+    session = LiveHistorySession(fixture["local_ip"])
+    for packet in fixture["packets"]:
+        if "payload_hex" in packet:
+            payload = bytes.fromhex(packet["payload_hex"])
+        else:
+            payload = bytes.fromhex(packet["payload_byte"]) * packet["payload_length"]
+        session.process_packet(
+            UdpPacket(
+                timestamp=packet["timestamp"],
+                src_ip=packet["src_ip"],
+                dst_ip=packet["dst_ip"],
+                src_port=packet["src_port"],
+                dst_port=packet["dst_port"],
+                payload=payload,
+                protocol=packet["protocol"],
+            )
+        )
+    return session
+
+
 def fixture_packets(scenario=None):
     fixture = load_network_fixture()
     packets = fixture["packets"]

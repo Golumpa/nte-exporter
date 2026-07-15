@@ -22,6 +22,12 @@ Do not replace this file with a real `.pcap`, `.flows`, or exported account
 history. Add new cases by constructing the smallest relevant payload, replacing
 all timestamps and endpoints, and extending the privacy assertions.
 
+`synthetic_capture_diagnostics.json` is a smaller replay transcript for failure
+paths. It deliberately contains a short response and a marker-free response so
+the debug sidecar's reason codes and privacy contract can be tested without a
+real capture. Repeated-byte payloads use `payload_byte` plus `payload_length` to
+keep the fixture readable.
+
 ## Synthetic NTE_Assets fixture
 
 `nte_assets/` mirrors only the six table paths and English localization file

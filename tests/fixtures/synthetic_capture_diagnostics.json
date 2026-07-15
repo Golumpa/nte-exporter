@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "description": "Minimal synthetic replay for capture diagnostic reason codes.",
+  "privacy": {
+    "synthetic": true,
+    "contains_user_uid": false,
+    "contains_raw_account_session": false
+  },
+  "local_ip": "192.0.2.10",
+  "expected": {
+    "packets_seen": 3,
+    "history_requests_recognized": 1,
+    "response_candidates_rejected": 2,
+    "event_counts": {
+      "HISTORY_REQUEST_RECOGNIZED": 1,
+      "NO_HISTORY_MARKER": 1,
+      "RESPONSE_TOO_SHORT": 1
+    },
+    "reason_counts": {
+      "NO_HISTORY_MARKER": 1,
+      "RESPONSE_TOO_SHORT": 1
+    },
+    "pending_response_candidates": 2,
+    "pending_candidate_lengths": [80, 220]
+  },
+  "packets": [
+    {
+      "label": "permanent-page-1-request",
+      "timestamp": 1893456000.0,
+      "src_ip": "192.0.2.10",
+      "dst_ip": "198.51.100.20",
+      "src_port": 50000,
+      "dst_port": 40000,
+      "protocol": "udp",
+      "payload_hex": "00000000000000000000000000000000000000000000000000000000000000040000007c100000000400000000"
+    },
+    {
+      "label": "matching-response-too-short",
+      "timestamp": 1893456000.1,
+      "src_ip": "198.51.100.20",
+      "dst_ip": "192.0.2.10",
+      "src_port": 40000,
+      "dst_port": 50000,
+      "protocol": "udp",
+      "payload_byte": "00",
+      "payload_length": 80
+    },
+    {
+      "label": "matching-response-without-history-marker",
+      "timestamp": 1893456000.2,
+      "src_ip": "198.51.100.20",
+      "dst_ip": "192.0.2.10",
+      "src_port": 40000,
+      "dst_port": 50000,
+      "protocol": "udp",
+      "payload_byte": "00",
+      "payload_length": 220
+    }
+  ]
+}

@@ -119,4 +119,5 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         "arc_rows": arc_rows,
         "arc_warnings": arc_warnings,
         "user_uid": session.user_uid or user_uid,
+        "capture_diagnostics": session.diagnostic_report(),
     }

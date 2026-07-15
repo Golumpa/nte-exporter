@@ -144,7 +144,7 @@ Decodes a `mitmproxy .flows` capture instead of listening live — used for rese
 | Flag      | Effect                                              |
 | --------- | --------------------------------------------------- |
 | `--live`  | Capture live UDP traffic instead of reading a file. |
-| `--debug` | Also write the full research CSV next to each JSON. |
+| `--debug` | Also write the research CSV and privacy-safe capture diagnostics. |
 | `--user-uid <uid>` | Override the auto-detected NTE user UID in the JSON export. |
 | `--copy-clipboard` | Copy a single live export JSON to clipboard after saving. |
 
@@ -156,7 +156,10 @@ Advanced live-capture selection:
 --capture-backend raw       Require the Windows raw-socket backend
 ```
 
-The `--debug` CSV holds any extra information that might be needed for fixing bugs. It contains no dangerous personal account data — only the raw bytes of the captured history page.
+The `--debug` CSV holds decoded research fields, including raw captured history
+records. A separate versioned `*.diagnostics.json` sidecar provides shareable
+reason codes and counts without payloads, network addresses, ports, packet
+timestamps, or user UID values. See [Capture diagnostics](docs/capture-diagnostics.md).
 
 The exporter automatically includes the shareable NTE user UID when it appears in the capture. If a short capture does not include it, the console asks before saving; you can also pass it explicitly with `--user-uid`.
 

@@ -17,9 +17,12 @@ from nte_history_exporter.decoder.protocol import (
     history_request_kind,
     is_history_request,
     request_page,
+    response_contains_history_marker,
 )
 from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.decoder.structured_protocol import FORK_MARKER, MONOPOLY_MARKER
 from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
+from nte_history_exporter.live_capture.diagnostics import CaptureDiagnostics
 
 
 @dataclass
@@ -61,6 +64,7 @@ class LiveHistorySession:
         self.unanswered_pages: dict[str, dict[int, str]] = {}
         self.user_uid: str | None = None
         self.user_uid_candidates: Counter[str] = Counter()
+        self.diagnostics = CaptureDiagnostics()
 
     def _mark_unanswered(self, request: PendingRequest) -> None:
         if request.response_candidates:
@@ -89,6 +93,14 @@ class LiveHistorySession:
             )
             if same_stream and (request.page == 1 or pending.page == request.page):
                 self._mark_unanswered(pending)
+                self.diagnostics.add_event(
+                    "REQUEST_REPLACED",
+                    request.request_msg,
+                    reason=True,
+                    kind=pending.kind,
+                    page=pending.page,
+                    response_candidates=pending.response_candidates,
+                )
             else:
                 retained.append(pending)
         self.pending = retained
@@ -97,6 +109,7 @@ class LiveHistorySession:
 
     def process_packet(self, packet: UdpPacket) -> bool:
         self.packet_count += 1
+        self.diagnostics.observe_packet(packet.protocol)
         candidates = extract_user_uid_candidates(packet.payload)
         if candidates:
             self.user_uid_candidates.update(candidates)
@@ -118,6 +131,13 @@ class LiveHistorySession:
                 dst_port=packet.dst_port,
             )
             self._queue_request(req)
+            self.diagnostics.counters["history_requests_recognized"] += 1
+            self.diagnostics.add_event(
+                "HISTORY_REQUEST_RECOGNIZED",
+                self.packet_count,
+                kind=req.kind,
+                page=req.page,
+            )
             self.last_page_seen = req.page
             return False
 
@@ -135,10 +155,17 @@ class LiveHistorySession:
                 dst_port=packet.dst_port,
             )
             self._queue_request(req)
+            self.diagnostics.counters["history_requests_recognized"] += 1
+            self.diagnostics.add_event(
+                "HISTORY_REQUEST_RECOGNIZED",
+                self.packet_count,
+                kind=req.kind,
+                page=req.page,
+            )
             self.last_page_seen = req.page
             return False
 
-        if packet.dst_ip != self.local_ip or len(packet.payload) < 100:
+        if packet.dst_ip != self.local_ip:
             return False
 
         connection_candidates = [
@@ -154,6 +181,14 @@ class LiveHistorySession:
         if not connection_candidates:
             return False
 
+        if len(packet.payload) < 100:
+            self._record_rejected_candidate(
+                connection_candidates,
+                packet.payload,
+                "RESPONSE_TOO_SHORT",
+            )
+            return False
+
         monopoly_records = decode_response_records(packet.payload)
         arc_records = parse_arc_response(packet.payload) if not monopoly_records else []
         if monopoly_records:
@@ -166,14 +201,35 @@ class LiveHistorySession:
             candidates = connection_candidates
             records = []
 
-        if not records or not candidates:
-            for req in candidates:
-                req.response_candidates += 1
-                req.response_candidate_lengths = (
-                    *req.response_candidate_lengths[-4:],
-                    len(packet.payload),
-                )
+        if records and not candidates:
+            self._record_rejected_candidate(
+                connection_candidates,
+                packet.payload,
+                "RESPONSE_KIND_MISMATCH",
+            )
             return False
+
+        if not records:
+            reason = (
+                "HISTORY_MARKER_PARSE_FAILED"
+                if response_contains_history_marker(packet.payload)
+                or MONOPOLY_MARKER in packet.payload
+                or FORK_MARKER in packet.payload
+                else "NO_HISTORY_MARKER"
+            )
+            self._record_rejected_candidate(candidates, packet.payload, reason)
+            return False
+
+        decoder_modes = sorted({record.get("decoder_mode", "heuristic") for record in records})
+        self.diagnostics.counters["history_responses_decoded"] += 1
+        self.diagnostics.add_event(
+            "HISTORY_RESPONSE_DECODED",
+            self.packet_count,
+            kind=candidates[0].kind,
+            payload_length=len(packet.payload),
+            record_count=len(records),
+            decoder_modes=decoder_modes,
+        )
 
         page_count = max(1, (len(records) + 4) // 5)
         if len(records) < 5:
@@ -208,8 +264,42 @@ class LiveHistorySession:
             )
             self.last_match_time = packet.timestamp
             self.last_page_seen = req.page
+            self.diagnostics.counters["pages_matched"] += 1
+            self.diagnostics.add_event(
+                "PAGE_RESPONSE_MATCHED",
+                self.packet_count,
+                kind=req.kind,
+                page=req.page,
+                record_count=slice_count,
+            )
 
         return bool(selected)
+
+    def _record_rejected_candidate(
+        self,
+        requests: list[PendingRequest],
+        payload: bytes,
+        reason: str,
+    ) -> None:
+        for req in requests:
+            req.response_candidates += 1
+            req.response_candidate_lengths = (
+                *req.response_candidate_lengths[-4:],
+                len(payload),
+            )
+        self.diagnostics.counters["response_candidates_rejected"] += 1
+        self.diagnostics.add_event(
+            reason,
+            self.packet_count,
+            reason=True,
+            kind=requests[0].kind if requests else None,
+            page=requests[0].page if requests else None,
+            payload_length=len(payload),
+            matching_requests=len(requests),
+        )
+
+    def diagnostic_report(self) -> dict[str, Any]:
+        return self.diagnostics.report(self.pending)
 
     def kinds_seen(self) -> list[str]:
         seen = []

@@ -10,6 +10,7 @@ from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.libpcap import LibpcapUnavailable
+from nte_history_exporter.live_capture.diagnostics import new_diagnostics_path, write_capture_diagnostics
 from nte_history_exporter.live_capture.runner import export_paths, run_live_capture
 from nte_history_exporter.update_check import check_for_update
 
@@ -32,7 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--copy-clipboard", action="store_true", help="copy a single live export to clipboard")
-    parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="also write a research CSV and privacy-safe capture diagnostics",
+    )
     parser.add_argument("--user-uid", default=None, help="override the auto-detected NTE user UID in the JSON export")
     return parser
 
@@ -79,8 +84,11 @@ def main(argv: list[str] | None = None) -> int:
         resolved_user_uid = console.prompt_user_uid()
 
     out_path, json_path = export_paths(kind, resolved_user_uid)
+    diagnostics_path = None
     if args.debug:
         write_csv(out_path, rows)
+        diagnostics_path = new_diagnostics_path(out_path.parent)
+        write_capture_diagnostics(diagnostics_path, decoded["capture_diagnostics"])
     export = build_export_json(
         rows,
         warnings,
@@ -105,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     if args.debug:
         console.print_note(f"CSV written: {out_path}")
+        console.print_note(f"Diagnostics written: {diagnostics_path}")
     console.print_note(f"Export written: {json_path}")
     return 0
 

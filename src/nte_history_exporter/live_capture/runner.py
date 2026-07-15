@@ -13,6 +13,7 @@ from nte_history_exporter.decoder.boundary import annotate_groups, select_contin
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.backends import open_capture_backend
+from nte_history_exporter.live_capture.diagnostics import new_diagnostics_path, write_capture_diagnostics
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
 from nte_history_exporter.live_capture.stop_key import StopKeyMonitor
 from nte_history_exporter.live_capture.windows_raw import detect_local_ipv4
@@ -135,6 +136,10 @@ def run_live_capture(
         )
 
     exports = []
+    diagnostics_path = None
+    if write_debug_csv:
+        diagnostics_path = new_diagnostics_path()
+        write_capture_diagnostics(diagnostics_path, session.diagnostic_report())
     resolved_user_uid = user_uid or session.user_uid
     if session.kinds_seen() and not resolved_user_uid:
         resolved_user_uid = console.prompt_user_uid()
@@ -164,6 +169,7 @@ def run_live_capture(
             {
                 "kind": kind,
                 "csv_path": csv_path if write_debug_csv else None,
+                "diagnostics_path": diagnostics_path if write_debug_csv else None,
                 "json_path": json_path,
                 "export": export,
                 "payload": payload,
@@ -176,7 +182,9 @@ def run_live_capture(
         console.print_note("Make sure the capture backend is running, then reopen the")
         console.print_note("history screen and scroll from page 1. If no page messages")
         console.print_note("appear, return to the main menu and re-enter the game.")
-        return {"exports": []}
+        if diagnostics_path is not None:
+            console.print_note(f"Diagnostics written: {diagnostics_path}")
+        return {"exports": [], "diagnostics_path": diagnostics_path}
 
     for item in exports:
         scan = item["export"]["scan"]
@@ -194,6 +202,8 @@ def run_live_capture(
         if item["csv_path"] is not None:
             console.print_note(f"CSV written: {item['csv_path']}")
         console.print_note(f"Export written: {item['json_path']}")
+    if diagnostics_path is not None:
+        console.print_note(f"Diagnostics written: {diagnostics_path}")
 
     if copy_clipboard and len(exports) == 1:
         if copy_to_clipboard(exports[0]["payload"]):
@@ -203,7 +213,7 @@ def run_live_capture(
     elif copy_clipboard and len(exports) > 1:
         console.print_note("Multiple banners captured; clipboard copy skipped so one export")
         console.print_note("does not overwrite another.")
-    return {"exports": exports}
+    return {"exports": exports, "diagnostics_path": diagnostics_path}
 
 
 def export_paths(kind: str, user_uid: str | None = None) -> tuple[Path, Path]:
