@@ -12,6 +12,7 @@ from nte_history_exporter.decoder.mystery_box import (
     select_continuous_mystery_box_run,
 )
 from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
+from nte_history_exporter.decoder.server_region import extract_server_id
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
 
 
@@ -84,10 +85,15 @@ def find_udp_flow(flows: list[Any], preferred_index: int | None = None) -> tuple
 def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> dict[str, Any]:
     flows = read_flows(path)
     user_uid_candidates: Counter[str] = Counter()
+    server_id_candidates: Counter[str] = Counter()
     for flow in flows:
         for msg in flow.get(b"messages", []):
             user_uid_candidates.update(extract_user_uid_candidates(msg[1]))
+            server_id = extract_server_id(msg[1])
+            if server_id:
+                server_id_candidates.update([server_id])
     user_uid = user_uid_candidates.most_common(1)[0][0] if user_uid_candidates else None
+    server_id = server_id_candidates.most_common(1)[0][0] if server_id_candidates else None
 
     resolved_flow_index, flow = find_udp_flow(flows, flow_index)
     messages = flow[b"messages"]
@@ -136,5 +142,6 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         "mystery_box_rows": mystery_box_rows,
         "mystery_box_warnings": mystery_box_warnings,
         "user_uid": session.user_uid or user_uid,
+        "server_id": session.server_id or server_id,
         "capture_diagnostics": session.diagnostic_report(),
     }

@@ -21,6 +21,7 @@ from nte_history_exporter.constants import POOL_META
 from nte_history_exporter.mappings import ARC_META, CHARACTERS, ITEMS, REWARDS_BY_ID
 from nte_history_exporter.decoder.protocol import decode_reward_key, infer_reward_type
 from nte_history_exporter.decoder.user_uid import extract_user_uid
+from nte_history_exporter.decoder.server_region import extract_server_id
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.decoder.arc import (
     arc_request_page,
@@ -46,6 +47,7 @@ from nte_history_exporter.live_capture.windows_raw import parse_ipv4_packet
 from nte_history_exporter.live_capture.backends import open_capture_backend
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.runner import export_paths
+from nte_history_exporter import console
 from nte_history_exporter.pool_mappings import load_pool_mappings, pool_meta_from_mapping
 from nte_history_exporter.update_check import UpdateInfo, check_for_update, is_newer_version
 

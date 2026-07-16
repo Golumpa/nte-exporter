@@ -144,6 +144,9 @@ def run_live_capture(
     resolved_user_uid = user_uid or session.user_uid
     if session.kinds_seen() and not resolved_user_uid:
         resolved_user_uid = console.prompt_user_uid()
+    resolved_server_id = session.server_id
+    if session.kinds_seen() and not resolved_server_id:
+        resolved_server_id = console.prompt_server_id()
     capture_source = CAPTURE_SOURCE_LABELS.get(capture.name, capture.name)
     for kind in session.kinds_seen():
         pairs = session.pairs_for_kind(kind)
@@ -162,6 +165,7 @@ def run_live_capture(
             source="live_capture",
             capture_source=capture_source,
             user_uid=resolved_user_uid,
+            server_id=resolved_server_id,
             pages_seen=pages_seen,
         )
         payload = json.dumps(export, ensure_ascii=False, indent=2)

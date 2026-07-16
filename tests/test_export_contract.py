@@ -10,6 +10,8 @@ class ExportContractTests(unittest.TestCase):
         self.assertEqual(export["format"], "nte-history-export")
         self.assertIn("exporter", export)
         self.assertNotIn("user_uid", export)
+        self.assertNotIn("server_id", export)
+        self.assertNotIn("account_region", export)
         self.assertNotIn("record_hex", export["records"][0])
         self.assertNotIn("request_msg", export["records"][0])
         self.assertNotIn("response_msg", export["records"][0])
@@ -26,6 +28,75 @@ class ExportContractTests(unittest.TestCase):
         self.assertEqual(list(export).index("user_uid"), list(export).index("records") - 1)
         self.assertEqual(export["capture_source"], "npcap")
         self.assertEqual(export["user_uid"], "123456789")
+
+    def test_export_includes_server_id_and_mapped_account_region(self):
+        annotated = annotate_groups(fixture_session().build_rows("permanent"))
+        export = build_export_json(annotated, [], server_id="23003")
+
+        self.assertEqual(export["server_id"], "23003")
+        self.assertEqual(export["account_region"], "EU")
+
+    def test_export_preserves_unknown_server_without_guessing_region(self):
+        annotated = annotate_groups(fixture_session().build_rows("permanent"))
+        export = build_export_json(annotated, [], server_id="23999")
+
+        self.assertEqual(export["server_id"], "23999")
+        self.assertNotIn("account_region", export)
+
+    def test_extracts_server_id_from_valid_initial_tcp_response(self):
+        payload = bytearray(204)
+        payload[0:4] = (200).to_bytes(4, "little")
+        payload[4:8] = (20).to_bytes(4, "little")
+        payload[96:100] = (23003).to_bytes(4, "little")
+        address = b"198.51.100.20"
+        payload[132:136] = len(address).to_bytes(4, "little")
+        payload[136 : 136 + len(address)] = address
+
+        self.assertEqual(extract_server_id(bytes(payload)), "23003")
+
+    def test_rejects_server_id_at_offset_without_valid_message_structure(self):
+        payload = bytearray(204)
+        payload[96:100] = (23003).to_bytes(4, "little")
+
+        self.assertIsNone(extract_server_id(bytes(payload)))
+
+    def test_live_session_detects_server_only_on_inbound_tcp(self):
+        payload = bytearray(204)
+        payload[0:4] = (200).to_bytes(4, "little")
+        payload[4:8] = (20).to_bytes(4, "little")
+        payload[96:100] = (23004).to_bytes(4, "little")
+        address = b"198.51.100.20"
+        payload[132:136] = len(address).to_bytes(4, "little")
+        payload[136 : 136 + len(address)] = address
+        session = LiveHistorySession("192.0.2.10")
+
+        session.process_packet(
+            UdpPacket(
+                1.0,
+                "198.51.100.20",
+                "192.0.2.10",
+                30000,
+                40000,
+                bytes(payload),
+                protocol="tcp",
+            )
+        )
+
+        self.assertEqual(session.server_id, "23004")
+
+    @patch("builtins.input", side_effect=["9", "3"])
+    def test_server_prompt_retries_then_returns_selected_server_id(self, _input):
+        self.assertEqual(console.prompt_server_id(), "23003")
+
+    @patch("builtins.input", return_value="")
+    def test_server_prompt_can_be_skipped(self, _input):
+        self.assertIsNone(console.prompt_server_id())
+
+    @patch("nte_history_exporter.console.wait_for_keypress")
+    def test_wait_for_close_waits_for_a_second_keypress(self, wait_for_keypress):
+        console.wait_for_close()
+
+        wait_for_keypress.assert_called_once_with()
 
     def test_debug_csv_includes_exporter_version(self):
         with TemporaryDirectory() as tmp:

@@ -15,7 +15,7 @@ decoder-only offsets.
   "capture_source": "npcap",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.11"
+    "version": "0.1.12"
   },
   "banner": {
     "id": "Lottery_Permanent",
@@ -32,6 +32,8 @@ decoder-only offsets.
     "warnings": []
   },
   "user_uid": "optional-user-uid",
+  "server_id": "23003",
+  "account_region": "EU",
   "records": []
 }
 ```
@@ -45,6 +47,11 @@ Top-level fields:
 - `banner`: The history pool this file belongs to.
 - `scan`: Export counts and capture warnings.
 - `user_uid`: Optional game account UID, if known.
+- `server_id`: Optional numeric account-server ID, detected from the initial TCP
+  connection or selected by the user.
+- `account_region`: Region code mapped from a known production `server_id`.
+  Current values are `AS`, `NA_SA`, `EU`, and `SE`. It is omitted for an
+  unrecognized server ID rather than guessed.
 - `records`: Pull/reward records.
 
 ## Fields to identify pulls

@@ -5,6 +5,41 @@ import select
 import sys
 
 
+def _read_windows_key() -> None:
+    import msvcrt
+
+    key = msvcrt.getch()
+    # Function and arrow keys are emitted as a two-byte sequence. Consume the
+    # second byte so it cannot immediately satisfy the next key prompt.
+    if key in {b"\x00", b"\xe0"}:
+        msvcrt.getch()
+
+
+def wait_for_keypress() -> None:
+    """Wait for one key on an interactive terminal, or Enter on redirected input."""
+    if os.name == "nt" and sys.stdin.isatty():
+        _read_windows_key()
+        return
+
+    if not sys.stdin.isatty():
+        try:
+            input()
+        except EOFError:
+            pass
+        return
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    original_terminal = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, original_terminal)
+
+
 class StopKeyMonitor:
     def __init__(self) -> None:
         self._windows = os.name == "nt"
@@ -29,7 +64,7 @@ class StopKeyMonitor:
 
             if not msvcrt.kbhit():
                 return False
-            msvcrt.getch()
+            _read_windows_key()
             return True
 
         if self._fd is None:

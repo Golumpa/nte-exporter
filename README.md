@@ -90,9 +90,9 @@ From source:
 Or simply double-click **`run-exporter.cmd`**.
 
 > [!IMPORTANT]
-> For automatic user UID detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for your UID before saving if it cannot detect it automatically.
+> For automatic user UID and account-server detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for missing account details before saving.
 
-Once running, open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as:
+Once running, open any supported history board in game. The tool keeps listening until you press any key. After it prints and saves the results, press any key again to close the exporter. Exports are written under `exports\` as:
 
 - `<user_uid>_Permanent_<date_time>.json`
 - `<user_uid>_Limited_<date_time>.json`
@@ -100,6 +100,11 @@ Once running, open any supported history board in game. The tool keeps listening
 - `<user_uid>_MysteryBox_<date_time>.json`
 
 If the user UID is not detected automatically, the console asks for it before saving. Leaving it blank saves as `unknown_<banner>_<date_time>.json`, but may prevent import on some trackers.
+
+The export also includes `server_id` and `account_region` when known. If the
+initial TCP server-selection response was missed, the console offers Asia,
+America, Europe, and SEA as a numbered choice. The prompt can be left blank to
+omit server information.
 
 Exports are not copied to the clipboard by default. Add `--copy-clipboard` to copy a single captured banner's JSON after saving. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
 

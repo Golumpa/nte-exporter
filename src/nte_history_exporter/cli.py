@@ -57,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
                 write_debug_csv=args.debug,
                 user_uid=args.user_uid,
             )
+            console.wait_for_close()
             return 0
         except (LibpcapUnavailable, PermissionError) as exc:
             console.print_problem(str(exc))
@@ -88,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
     resolved_user_uid = args.user_uid or decoded.get("user_uid")
     if not resolved_user_uid:
         resolved_user_uid = console.prompt_user_uid()
+    resolved_server_id = decoded.get("server_id")
+    if not resolved_server_id:
+        resolved_server_id = console.prompt_server_id()
 
     out_path, json_path = export_paths(kind, resolved_user_uid)
     diagnostics_path = None
@@ -101,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         source="packet_capture",
         capture_source="mitmproxy_flows",
         user_uid=resolved_user_uid,
+        server_id=resolved_server_id,
         flow_index=decoded["flow_index"],
         candidate_request_response_pairs=pair_count,
         pages_seen=[p[0] for p in best_run],

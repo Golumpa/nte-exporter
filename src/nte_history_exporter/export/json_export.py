@@ -11,6 +11,7 @@ from nte_history_exporter.constants import (
     POOL_META,
     MYSTERY_BOX_BANNER_ID,
 )
+from nte_history_exporter.decoder.server_region import account_region_for_server
 
 
 def build_export_json(
@@ -20,6 +21,7 @@ def build_export_json(
     source: str = "packet_capture",
     capture_source: str | None = None,
     user_uid: str | None = None,
+    server_id: str | None = None,
     flow_index: int | None = None,
     candidate_request_response_pairs: int | None = None,
     pages_seen: list[int] | None = None,
@@ -44,6 +46,7 @@ def build_export_json(
         scan["pages_seen"] = pages_seen
 
     normalized_user_uid = user_uid.strip() if user_uid else ""
+    normalized_server_id = str(server_id).strip() if server_id else ""
     export: dict[str, Any] = {
         "format": "nte-history-export",
         "format_version": 1,
@@ -66,6 +69,11 @@ def build_export_json(
     )
     if normalized_user_uid:
         export["user_uid"] = normalized_user_uid
+    if normalized_server_id:
+        export["server_id"] = normalized_server_id
+        account_region = account_region_for_server(normalized_server_id)
+        if account_region:
+            export["account_region"] = account_region
     export["records"] = [_record_for_export(r) for r in exported]
     return export
 

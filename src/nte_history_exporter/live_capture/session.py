@@ -30,6 +30,7 @@ from nte_history_exporter.decoder.mystery_box import (
 from nte_history_exporter.decoder.structured_protocol import FORK_MARKER, MONOPOLY_MARKER
 from nte_history_exporter.constants import MYSTERY_BOX_MARKER
 from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
+from nte_history_exporter.decoder.server_region import extract_server_id
 from nte_history_exporter.live_capture.diagnostics import CaptureDiagnostics
 
 
@@ -72,6 +73,7 @@ class LiveHistorySession:
         self.unanswered_pages: dict[str, dict[int, str]] = {}
         self.user_uid: str | None = None
         self.user_uid_candidates: Counter[str] = Counter()
+        self.server_id: str | None = None
         self.diagnostics = CaptureDiagnostics()
 
     def _mark_unanswered(self, request: PendingRequest) -> None:
@@ -122,6 +124,11 @@ class LiveHistorySession:
         if candidates:
             self.user_uid_candidates.update(candidates)
             self.user_uid = self.user_uid_candidates.most_common(1)[0][0]
+        if packet.protocol == "tcp" and packet.dst_ip == self.local_ip and not self.server_id:
+            self.server_id = extract_server_id(packet.payload)
+            if self.server_id:
+                self.diagnostics.counters["server_ids_detected"] += 1
+                self.diagnostics.add_event("SERVER_ID_DETECTED", self.packet_count)
         if packet.protocol != "udp":
             return False
 
