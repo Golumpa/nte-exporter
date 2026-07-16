@@ -9,7 +9,9 @@ from nte_history_exporter.constants import (
     EXPORTER_NAME,
     GAME_NAME,
     POOL_META,
+    MYSTERY_BOX_BANNER_ID,
 )
+from nte_history_exporter.decoder.server_region import account_region_for_server
 
 
 def build_export_json(
@@ -19,6 +21,7 @@ def build_export_json(
     source: str = "packet_capture",
     capture_source: str | None = None,
     user_uid: str | None = None,
+    server_id: str | None = None,
     flow_index: int | None = None,
     candidate_request_response_pairs: int | None = None,
     pages_seen: list[int] | None = None,
@@ -43,6 +46,7 @@ def build_export_json(
         scan["pages_seen"] = pages_seen
 
     normalized_user_uid = user_uid.strip() if user_uid else ""
+    normalized_server_id = str(server_id).strip() if server_id else ""
     export: dict[str, Any] = {
         "format": "nte-history-export",
         "format_version": 1,
@@ -65,6 +69,11 @@ def build_export_json(
     )
     if normalized_user_uid:
         export["user_uid"] = normalized_user_uid
+    if normalized_server_id:
+        export["server_id"] = normalized_server_id
+        account_region = account_region_for_server(normalized_server_id)
+        if account_region:
+            export["account_region"] = account_region
     export["records"] = [_record_for_export(r) for r in exported]
     return export
 
@@ -80,6 +89,21 @@ def _record_for_export(row: dict[str, Any]) -> dict[str, Any]:
             "reward_id": row.get("reward_id"),
             "reward_name": row.get("reward_name"),
             "reward_rank": row.get("reward_rank"),
+            "source_type": row.get("source_type"),
+        }
+
+    if row.get("pool_group_id") == MYSTERY_BOX_BANNER_ID:
+        return {
+            "uid": row.get("uid"),
+            "pool_group_id": row.get("pool_group_id"),
+            "timestamp": row.get("timestamp_decoded"),
+            "timestamp_group_ordinal": row.get("timestamp_group_ordinal"),
+            "result_type": "single_pull",
+            "reward_type": row.get("reward_type"),
+            "reward_id": row.get("reward_id"),
+            "reward_name": row.get("reward_name"),
+            "reward_rank": row.get("reward_rank"),
+            "quantity": row.get("quantity"),
             "source_type": row.get("source_type"),
         }
 

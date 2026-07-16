@@ -4,6 +4,8 @@ import os
 import sys
 
 from nte_history_exporter.constants import EXPORTER_VERSION, GAME_NAME
+from nte_history_exporter.decoder.server_region import SERVER_REGIONS
+from nte_history_exporter.live_capture.stop_key import wait_for_keypress
 
 WIDTH = 58
 REPOSITORY_URL = "https://github.com/Golumpa/nte-exporter"
@@ -82,6 +84,7 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
     print(style("         Monopoly  >  Standard Board history", CYAN))
     print(style("         Monopoly  >  Limited Character Board history", CYAN))
     print(style("         Gashapon  >  Arc Miracle Box history", CYAN))
+    print(style("         Gashapon  >  Mystery Box history", CYAN))
     print("    3. Start at page 1 and scroll down through every page")
     print("       you want exported.")
     print("    4. Scroll one page past where you plan to stop so the")
@@ -178,3 +181,30 @@ def prompt_user_uid() -> str | None:
     print_note("Leaving this blank may prevent import on some trackers.")
     value = input("  User UID: ").strip()
     return value or None
+
+
+def prompt_server_id() -> str | None:
+    print()
+    print_problem("Account server was not detected in this capture.")
+    print_note("Choose the server used by this account:")
+    choices = tuple(
+        (str(index), server_id, details["name"])
+        for index, (server_id, details) in enumerate(SERVER_REGIONS.items(), start=1)
+    )
+    for key, _server_id, name in choices:
+        print(f"    {key}. {name}")
+    print_note("Leave this blank to omit server information.")
+    by_key = {key: server_id for key, server_id, _name in choices}
+    while True:
+        value = input("  Server [1-4]: ").strip()
+        if not value:
+            return None
+        if value in by_key:
+            return by_key[value]
+        print_problem("Enter 1, 2, 3, or 4; or leave it blank.")
+
+
+def wait_for_close() -> None:
+    print()
+    print_success("Press any key to close the exporter.")
+    wait_for_keypress()

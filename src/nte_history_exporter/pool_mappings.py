@@ -8,6 +8,7 @@ POOL_MAPPING_FILES = {
     "permanent": "permanent_board.json",
     "limited_character": "limited_character_board.json",
     "arc_miracle_box": "arc_miracle_box.json",
+    "mystery_box": "mystery_box.json",
 }
 
 

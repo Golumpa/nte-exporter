@@ -10,6 +10,7 @@ from nte_history_exporter.decoder.boundary import annotate_groups
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
 from nte_history_exporter.live_capture.libpcap import LibpcapUnavailable
+from nte_history_exporter.live_capture.diagnostics import new_diagnostics_path, write_capture_diagnostics
 from nte_history_exporter.live_capture.runner import export_paths, run_live_capture
 from nte_history_exporter.update_check import check_for_update
 
@@ -32,7 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--copy-clipboard", action="store_true", help="copy a single live export to clipboard")
-    parser.add_argument("--debug", action="store_true", help="also write research CSVs next to the JSON exports")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="also write a research CSV and privacy-safe capture diagnostics",
+    )
     parser.add_argument("--user-uid", default=None, help="override the auto-detected NTE user UID in the JSON export")
     return parser
 
@@ -52,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
                 write_debug_csv=args.debug,
                 user_uid=args.user_uid,
             )
+            console.wait_for_close()
             return 0
         except (LibpcapUnavailable, PermissionError) as exc:
             console.print_problem(str(exc))
@@ -61,7 +67,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     decoded = decode_mitmproxy_flows(args.capture_source, args.flow_index)
-    if decoded["arc_rows"] and not decoded["rows"]:
+    if decoded["mystery_box_rows"] and not decoded["rows"] and not decoded["arc_rows"]:
+        rows = decoded["mystery_box_rows"]
+        warnings = decoded["mystery_box_warnings"]
+        kind = "mystery_box"
+        best_run = decoded["best_mystery_box_run"]
+        pair_count = len(decoded["mystery_box_pairs"])
+    elif decoded["arc_rows"] and not decoded["rows"]:
         rows = decoded["arc_rows"]
         warnings = decoded["arc_warnings"]
         kind = "arc_miracle_box"
@@ -77,16 +89,23 @@ def main(argv: list[str] | None = None) -> int:
     resolved_user_uid = args.user_uid or decoded.get("user_uid")
     if not resolved_user_uid:
         resolved_user_uid = console.prompt_user_uid()
+    resolved_server_id = decoded.get("server_id")
+    if not resolved_server_id:
+        resolved_server_id = console.prompt_server_id()
 
     out_path, json_path = export_paths(kind, resolved_user_uid)
+    diagnostics_path = None
     if args.debug:
         write_csv(out_path, rows)
+        diagnostics_path = new_diagnostics_path(out_path.parent)
+        write_capture_diagnostics(diagnostics_path, decoded["capture_diagnostics"])
     export = build_export_json(
         rows,
         warnings,
         source="packet_capture",
         capture_source="mitmproxy_flows",
         user_uid=resolved_user_uid,
+        server_id=resolved_server_id,
         flow_index=decoded["flow_index"],
         candidate_request_response_pairs=pair_count,
         pages_seen=[p[0] for p in best_run],
@@ -105,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     if args.debug:
         console.print_note(f"CSV written: {out_path}")
+        console.print_note(f"Diagnostics written: {diagnostics_path}")
     console.print_note(f"Export written: {json_path}")
     return 0
 

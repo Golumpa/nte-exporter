@@ -16,6 +16,10 @@ from nte_history_exporter.constants import (
     VALID_DICE_FIELDS,
 )
 from nte_history_exporter.mappings import REWARDS_BY_ID
+from nte_history_exporter.decoder.structured_protocol import (
+    StructuredRecord,
+    parse_structured_records,
+)
 
 REWARD_ID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
 WARP_PIECE_CHASE_PATTERN = bytes.fromhex(
@@ -299,7 +303,117 @@ def _decode_aligned_response_records(response_content: bytes) -> list[dict[str, 
     return rows
 
 
+def _structured_result(raw: int | None) -> tuple[int | None, int | None, str, int | None]:
+    if raw is None:
+        return None, None, "unknown", None
+    if raw == 0:
+        return 0, 0, "points_gift", 0
+    if raw == 0xFFFFFFFF:
+        return -4, -4, "chase_reward", -4
+    return raw, raw, "dice", raw
+
+
+def _structured_rows_compatible(
+    heuristic_rows: list[dict[str, Any]], structured_rows: list[StructuredRecord]
+) -> bool:
+    if len(heuristic_rows) != len(structured_rows):
+        return False
+    for heuristic, structured in zip(heuristic_rows, structured_rows):
+        heuristic_id = heuristic.get("reward_id") or ""
+        if heuristic_id and heuristic_id.casefold() != structured.item_id.casefold():
+            return False
+        heuristic_ticks = heuristic.get("timestamp_ticks")
+        if heuristic_ticks not in {structured.ticks, structured.ticks * 4}:
+            return False
+    return True
+
+
+def _enrich_heuristic_rows(
+    heuristic_rows: list[dict[str, Any]], structured_rows: list[StructuredRecord]
+) -> list[dict[str, Any]]:
+    if not _structured_rows_compatible(heuristic_rows, structured_rows):
+        return heuristic_rows
+    for heuristic, structured in zip(heuristic_rows, structured_rows):
+        if not heuristic.get("reward_id"):
+            heuristic["reward_id"] = structured.item_id
+            reward = _reward_metadata(structured.item_id)
+            heuristic["reward_type"] = reward.get("type") or infer_reward_type(structured.item_id)
+            heuristic["reward_name"] = reward.get("name", "")
+            heuristic["reward_rank"] = reward.get("rank")
+        heuristic["quantity"] = structured.count
+        if heuristic.get("result_type") == "unknown" or heuristic.get("dice") is None:
+            dice, dice_raw, result_type, result_source = _structured_result(structured.roll_points_raw)
+            heuristic["dice"] = dice
+            heuristic["dice_raw_u32"] = dice_raw
+            heuristic["result_type"] = result_type
+            heuristic["result_source_raw"] = result_source
+            heuristic["roll_result"] = (
+                "Points Gift"
+                if result_type == "points_gift"
+                else ("Chase Reward" if result_type == "chase_reward" else (f"Dice {dice}" if dice else ""))
+            )
+        heuristic["decoder_mode"] = "heuristic_enriched"
+        heuristic["structured_pool_id"] = structured.pool_id
+        heuristic["secondary_reward_id"] = structured.secondary_item_id
+        heuristic["secondary_quantity"] = structured.secondary_count
+        heuristic["structured_protocol_view"] = structured.protocol_view
+    return heuristic_rows
+
+
+def _reward_metadata(reward_id: str) -> dict[str, Any]:
+    direct = REWARDS_BY_ID.get(reward_id)
+    if direct is not None:
+        return direct
+    folded = reward_id.casefold()
+    return next((meta for item_id, meta in REWARDS_BY_ID.items() if item_id.casefold() == folded), {})
+
+
+def structured_monopoly_rows(structured_rows: list[StructuredRecord]) -> list[dict[str, Any]]:
+    rows = []
+    for row_index, structured in enumerate(structured_rows, start=1):
+        dice, dice_raw, result_type, result_source = _structured_result(structured.roll_points_raw)
+        reward = _reward_metadata(structured.item_id)
+        rows.append(
+            {
+                "row": row_index,
+                "record_start": structured.record_start,
+                "record_end": structured.record_end,
+                "record_len": structured.record_end - structured.record_start,
+                "dice": dice,
+                "roll_result": (
+                    "Points Gift"
+                    if result_type == "points_gift"
+                    else ("Chase Reward" if result_type == "chase_reward" else (f"Dice {dice}" if dice else ""))
+                ),
+                "result_type": result_type,
+                "result_source_raw": result_source,
+                "dice_raw_u32": dice_raw,
+                "dice_offset_in_record": None,
+                "reward_key_hex": "",
+                "reward_type": reward.get("type") or infer_reward_type(structured.item_id),
+                "reward_id": structured.item_id,
+                "reward_name": reward.get("name", ""),
+                "reward_rank": reward.get("rank"),
+                "quantity": structured.count,
+                "timestamp_raw_hex": structured.ticks.to_bytes(8, "little").hex(),
+                "timestamp_ticks": structured.ticks,
+                "timestamp_unix": f"{structured.timestamp_unix:.6f}",
+                "timestamp_decoded": structured.timestamp_decoded,
+                "record_hex": structured.record_hex,
+                "decoder_mode": "structured_fallback",
+                "structured_pool_id": structured.pool_id,
+                "secondary_reward_id": structured.secondary_item_id,
+                "secondary_quantity": structured.secondary_count,
+                "structured_protocol_view": structured.protocol_view,
+                "structured_generation_index": structured.generation_index,
+            }
+        )
+    return rows
+
+
 def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
+    structured_rows = parse_structured_records(response_content, "monopoly")
+    heuristic_rows: list[dict[str, Any]] = []
     for candidate in iter_history_response_alignments(response_content):
         if not any(marker in candidate for marker in MARKERS):
             continue
@@ -308,5 +422,8 @@ def decode_response_records(response_content: bytes) -> list[dict[str, Any]]:
         except (OSError, OverflowError, ValueError):
             continue
         if rows:
-            return rows
-    return []
+            heuristic_rows = rows
+            break
+    if heuristic_rows:
+        return _enrich_heuristic_rows(heuristic_rows, structured_rows)
+    return structured_monopoly_rows(structured_rows)

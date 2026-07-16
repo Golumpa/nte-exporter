@@ -19,10 +19,11 @@ Prototype CLI exporter for **Neverness to Everness** pull history — decodes yo
 | Monopoly | Standard Board          | `Lottery_Permanent`        | Per-banner |
 | Monopoly | Limited Character Board | `Lottery_LimitedCharacter` | Shared     |
 | Gashapon | Arc Miracle Box         | `Arc_MiracleBox`           | Shared     |
+| Gashapon | Mystery Box             | `Gashapon_MysteryBox`      | Per-rotation |
 
 ## What It Does
 
-The exporter decodes Permanent Board, Limited Character Board, and Arc Miracle Box history pages from captured UDP data, applies conservative timestamp-boundary handling, and writes sanitized JSON suitable for tracker import.
+The exporter decodes Permanent Board, Limited Character Board, Arc Miracle Box, and Mystery Box history pages from captured UDP data, applies conservative timestamp-boundary handling, and writes sanitized JSON suitable for tracker import.
 
 > [!NOTE]
 > The import JSON contains decoded history rows and the shareable NTE user UID when it can be detected. It does **not** export tokens, account IDs, role IDs, device IDs, server IPs, raw packets, cookies, session data, or other capture metadata.
@@ -89,15 +90,21 @@ From source:
 Or simply double-click **`run-exporter.cmd`**.
 
 > [!IMPORTANT]
-> For automatic user UID detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for your UID before saving if it cannot detect it automatically.
+> For automatic user UID and account-server detection, launch the tool **before pressing Start on the game's main menu**. If you are already in game, history capture can still work; the tool will ask for missing account details before saving.
 
-Once running, open any supported history board in game. The tool keeps listening until you press any key. Exports are written under `exports\` as:
+Once running, open any supported history board in game. The tool keeps listening until you press any key. After it prints and saves the results, press any key again to close the exporter. Exports are written under `exports\` as:
 
 - `<user_uid>_Permanent_<date_time>.json`
 - `<user_uid>_Limited_<date_time>.json`
 - `<user_uid>_Arc_<date_time>.json`
+- `<user_uid>_MysteryBox_<date_time>.json`
 
 If the user UID is not detected automatically, the console asks for it before saving. Leaving it blank saves as `unknown_<banner>_<date_time>.json`, but may prevent import on some trackers.
+
+The export also includes `server_id` and `account_region` when known. If the
+initial TCP server-selection response was missed, the console offers Asia,
+America, Europe, and SEA as a numbered choice. The prompt can be left blank to
+omit server information.
 
 Exports are not copied to the clipboard by default. Add `--copy-clipboard` to copy a single captured banner's JSON after saving. If multiple banners are captured in the same run, clipboard copy is skipped so one banner does not overwrite another.
 
@@ -144,7 +151,7 @@ Decodes a `mitmproxy .flows` capture instead of listening live — used for rese
 | Flag      | Effect                                              |
 | --------- | --------------------------------------------------- |
 | `--live`  | Capture live UDP traffic instead of reading a file. |
-| `--debug` | Also write the full research CSV next to each JSON. |
+| `--debug` | Also write the research CSV and privacy-safe capture diagnostics. |
 | `--user-uid <uid>` | Override the auto-detected NTE user UID in the JSON export. |
 | `--copy-clipboard` | Copy a single live export JSON to clipboard after saving. |
 
@@ -156,12 +163,35 @@ Advanced live-capture selection:
 --capture-backend raw       Require the Windows raw-socket backend
 ```
 
-The `--debug` CSV holds any extra information that might be needed for fixing bugs. It contains no dangerous personal account data — only the raw bytes of the captured history page.
+The `--debug` CSV holds decoded research fields, including raw captured history
+records. A separate versioned `*.diagnostics.json` sidecar provides shareable
+reason codes and counts without payloads, network addresses, ports, packet
+timestamps, or user UID values. See [Capture diagnostics](docs/capture-diagnostics.md).
 
 The exporter automatically includes the shareable NTE user UID when it appears in the capture. If a short capture does not include it, the console asks before saving; you can also pass it explicitly with `--user-uid`.
 
 > [!TIP]
 > For reliable deduplication, start from page 1 and scroll through the pages. If you only want pages 1–5, scroll through to page 6 as well just to be on the safe side.
+
+## Mapping maintenance
+
+Reward metadata can be rebuilt directly from the latest NTE_Assets tables and
+English translation files. The reward snapshot may change IDs while UID inputs
+remain untouched:
+
+Run **Update reward mappings** from the GitHub Actions tab to generate and test
+the snapshot in a reviewable pull request, or run it locally:
+
+```powershell
+python tools/update_mappings.py
+```
+
+This rebuilds reviewable reward-map candidates directly from NTE_Assets under
+`build/mapping-update/`; committed mappings are untouched unless `--apply` is
+explicitly supplied. The snapshot may include additions, updates, and removals,
+while pool mappings and UID inputs remain untouched. See
+[Reward mapping updates](docs/mapping-updates.md) for the source rules and
+review workflow.
 
 ## Privacy
 
@@ -176,7 +206,7 @@ History always loads page 1 first and is scrolled downward, so the exporter anch
 
 Within a timestamp group, ordinal 0 is the newest record and unseen rows can only append after the captured ones, so **every exported UID is stable** — including a partially captured oldest 10-pull. All decoded rows are therefore exported. Re-scanning later simply adds any rows that were not yet captured, with the same UIDs for the rows already seen.
 
-For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls. In both systems every captured group is exported, including the oldest one even if it is a partially captured pull set, because its captured prefix is ordinal-stable.
+For Monopoly, Points Gift and Chase Reward rows stay in the timestamp group for UID ordinal generation, but only `result_type = dice` rows count toward pull-set sizing. Arc pulls are always 10-pulls. Mystery Box records are single pulls and the final page may contain fewer than five records. Every captured group is exported, including an incomplete oldest pull set, because its captured prefix is ordinal-stable.
 
 ## Adapters
 

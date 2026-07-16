@@ -22,6 +22,12 @@ from nte_history_exporter.constants import (
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.run import fmt_packet_time
 from nte_history_exporter.mappings import ARC_META
+from nte_history_exporter.decoder.structured_protocol import (
+    StructuredProtocolAssembler,
+    StructuredRecord,
+    parse_structured_blocks,
+    parse_structured_records,
+)
 
 
 def is_arc_history_request(content: bytes) -> bool:
@@ -61,7 +67,7 @@ def decode_arc_timestamp(raw8: bytes) -> tuple[int, float, str]:
     return ticks, unix_seconds, decoded
 
 
-def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
+def _parse_legacy_arc_response(response: bytes) -> list[dict[str, Any]]:
     pos = ARC_RESPONSE_FIRST_RECORD_OFFSET
     records: list[dict[str, Any]] = []
     while pos + 4 <= len(response):
@@ -116,7 +122,70 @@ def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
     return records
 
 
-def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
+def _arc_metadata(arc_id: str) -> dict[str, Any]:
+    direct = ARC_META.get(arc_id)
+    if direct is not None:
+        return direct
+    folded = arc_id.casefold()
+    return next((meta for item_id, meta in ARC_META.items() if item_id.casefold() == folded), {})
+
+
+def structured_arc_rows(structured_rows: list[StructuredRecord]) -> list[dict[str, Any]]:
+    records = []
+    for structured in structured_rows:
+        meta = _arc_metadata(structured.item_id)
+        records.append(
+            {
+                "record_start": structured.record_start,
+                "record_end": structured.record_end,
+                "record_len": structured.record_end - structured.record_start,
+                "reward_key_hex": "",
+                "reward_type": "arc",
+                "reward_id": structured.item_id,
+                "reward_name": meta.get("name", "UNKNOWN"),
+                "reward_rank": meta.get("rank", ""),
+                "type_key_hex": "",
+                "source_type": "miracle_box",
+                "timestamp_raw_hex": structured.ticks.to_bytes(8, "little").hex(),
+                "timestamp_ticks": structured.ticks,
+                "timestamp_unix": structured.timestamp_unix,
+                "timestamp_decoded": structured.timestamp_decoded,
+                "record_hex": structured.record_hex,
+                "decoder_mode": "structured_fallback",
+                "structured_pool_id": structured.pool_id,
+                "structured_protocol_view": structured.protocol_view,
+                "structured_generation_index": structured.generation_index,
+            }
+        )
+    return records
+
+
+def _enrich_legacy_arc_rows(
+    legacy_rows: list[dict[str, Any]], structured_rows: list[StructuredRecord]
+) -> list[dict[str, Any]]:
+    if len(legacy_rows) != len(structured_rows):
+        return legacy_rows
+    for legacy, structured in zip(legacy_rows, structured_rows):
+        if legacy.get("reward_id", "").casefold() != structured.item_id.casefold():
+            return legacy_rows
+        if legacy.get("timestamp_ticks") not in {structured.ticks, structured.ticks * 2}:
+            return legacy_rows
+    for legacy, structured in zip(legacy_rows, structured_rows):
+        legacy["decoder_mode"] = "heuristic_enriched"
+        legacy["structured_pool_id"] = structured.pool_id
+        legacy["structured_protocol_view"] = structured.protocol_view
+    return legacy_rows
+
+
+def parse_arc_response(response: bytes) -> list[dict[str, Any]]:
+    structured_rows = parse_structured_records(response, "fork")
+    legacy_rows = _parse_legacy_arc_response(response)
+    if legacy_rows:
+        return _enrich_legacy_arc_rows(legacy_rows, structured_rows)
+    return structured_arc_rows(structured_rows)
+
+
+def _build_primary_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
     pool = POOL_META["arc_miracle_box"]
     rows: list[dict[str, Any]] = []
     for pair in pairs:
@@ -142,6 +211,48 @@ def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
                     "record_count": len(records),
                 }
             )
+    annotate_arc_groups(rows)
+    return rows
+
+
+def build_arc_rows_from_pairs(pairs: list[tuple]) -> list[dict[str, Any]]:
+    primary_rows = _build_primary_arc_rows_from_pairs(pairs)
+    if primary_rows and any(row.get("decoder_mode") != "structured_fallback" for row in primary_rows):
+        return primary_rows
+
+    assembler = StructuredProtocolAssembler()
+    for source_index, pair in enumerate(pairs):
+        assembler.add_blocks(parse_structured_blocks(pair[6], "fork", source_index=source_index))
+    assembled = assembler.rows("fork")
+    if not assembled:
+        return primary_rows
+
+    pool = POOL_META["arc_miracle_box"]
+    rows = []
+    for row_index, (record, structured) in enumerate(
+        zip(structured_arc_rows(assembled), assembled), start=1
+    ):
+        source_index = structured.source_index or 0
+        pair = pairs[source_index]
+        page, offset, req_i, req_ts, resp_i, resp_ts, response = pair[:7]
+        rows.append(
+            {
+                **record,
+                "page": page,
+                "offset": offset,
+                "row": row_index,
+                "pool_group_id": pool["id"],
+                "pool_group_name": pool["name"],
+                "request_msg": req_i,
+                "request_time_utc": fmt_packet_time(req_ts),
+                "response_msg": resp_i,
+                "response_time_utc": fmt_packet_time(resp_ts),
+                "response_len": len(response),
+                "record_count": len(assembled),
+                "structured_assembly": "snapshot_segments",
+                "structured_assembly_warning_count": len(assembler.warnings),
+            }
+        )
     annotate_arc_groups(rows)
     return rows
 

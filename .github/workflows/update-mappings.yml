@@ -1,0 +1,136 @@
+name: Update reward mappings
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: NTE_Assets branch, tag, or commit
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-reward-mappings
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Rebuild mappings from NTE_Assets
+    runs-on: ubuntu-latest
+
+    env:
+      AUTOMATION_BRANCH: dev/automated-mapping-update
+      NTE_ASSETS_REF: ${{ inputs.source_ref }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Get Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project
+        run: python -m pip install -e .
+
+      - name: Rebuild reward mappings
+        run: python tools/update_mappings.py --source-ref "$NTE_ASSETS_REF" --apply
+
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+      - name: Summarize mapping changes
+        id: changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("build/mapping-update/mapping-update-report.json").read_text())
+          changes = report["changes"]
+          changed = sum(changes.values()) > 0
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"changed={'true' if changed else 'false'}\n")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("## NTE_Assets mapping update\n\n")
+              summary.write(f"Source ref: `{report['source_ref']}`\n\n")
+              summary.write(f"- Additions: {changes['additions']}\n")
+              summary.write(f"- Updates: {changes['updates']}\n")
+              summary.write(f"- Deletions: {changes['deletions']}\n")
+          PY
+
+      - name: Upload review report
+        uses: actions/upload-artifact@v6
+        with:
+          name: mapping-update-report
+          path: build/mapping-update/mapping-update-report.json
+
+      - name: Commit and push mapping changes
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$AUTOMATION_BRANCH"
+          git add mappings/arcs.json mappings/characters.json mappings/items.json
+          git commit -m "chore: update reward mappings from NTE_Assets"
+          git push --force origin "HEAD:refs/heads/$AUTOMATION_BRANCH"
+
+      - name: Open or update pull request
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("build/mapping-update/mapping-update-report.json").read_text())
+          changes = report["changes"]
+          body = (
+              "Automated authoritative reward-mapping snapshot from "
+              "[Waifus-Grace/NTE_Assets](https://github.com/Waifus-Grace/NTE_Assets).\n\n"
+              f"Source ref: `{report['source_ref']}`\n\n"
+              f"- {changes['additions']} additions\n"
+              f"- {changes['updates']} updates\n"
+              f"- {changes['deletions']} deletions\n\n"
+              "The workflow rebuilt all reward mappings, resolved English names through "
+              "`Localization/en/game.json`, and passed the complete test suite. Pool mapping "
+              "files and UID inputs were not changed.\n\n"
+              f"[Workflow run]({os.environ['RUN_URL']})\n"
+          )
+          Path("build/mapping-update/pull-request-body.md").write_text(body, encoding="utf-8")
+          PY
+
+          pr_number="$(gh pr list \
+            --head "$AUTOMATION_BRANCH" \
+            --base "$BASE_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" \
+              --title "chore: update reward mappings from NTE_Assets" \
+              --body-file build/mapping-update/pull-request-body.md
+          else
+            gh pr create \
+              --head "$AUTOMATION_BRANCH" \
+              --base "$BASE_BRANCH" \
+              --title "chore: update reward mappings from NTE_Assets" \
+              --body-file build/mapping-update/pull-request-body.md
+          fi

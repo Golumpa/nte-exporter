@@ -1,6 +1,51 @@
 # Packet Format Notes
 
-This prototype supports separate Monopoly and Arc/Gashapon history decoders.
+This prototype supports separate Monopoly, Arc/Gashapon, and Mystery Box history decoders.
+
+## Decoder strategy
+
+Both history paths now recognize the structured `FMonopolyLotteryRecordData`
+and `FForkLotteryRecordData` blocks, including blocks packed at a non-byte
+alignment. Structured fields include the item/count pair, pool ID, secondary
+reward data, roll result, and standard .NET timestamp.
+
+The structured parser is deliberately compatibility-gated:
+
+- The established decoder remains the primary path.
+- Structured rows enrich primary rows only when row count, reward ID, and raw
+  timestamp agree. Enrichment supplies exact quantities, missing roll details,
+  pool diagnostics, and secondary reward diagnostics.
+- If the primary decoder returns no records but a complete structured block is
+  valid, the structured records are converted into the same internal row shape
+  as a fallback.
+- Malformed, incomplete, mismatched, or ambiguous structured data is ignored;
+  it cannot overwrite a successfully decoded primary row.
+
+Structured protocol envelopes identify a history stream, page, query side, and
+segment index. For an all-structured fallback run, the snapshot assembler:
+
+- orders segments by their protocol index while retaining row order inside
+  every segment;
+- ignores exact retransmissions;
+- starts a new generation when an existing segment index changes;
+- replaces an older snapshot only when the new generation covers at least the
+  same segment range;
+- merges a partial generation only when its suffix has one unique overlap with
+  the proven snapshot; and
+- retains the proven snapshot and records an assembly warning when a merge is
+  ambiguous.
+
+Assembly never runs on a history run containing a successfully decoded primary
+row. Such runs retain their existing packet/page order exactly. Timestamp-group
+ordinals and UIDs are calculated only after any fallback assembly, using the
+same inputs and algorithms as before.
+
+`decoder_mode`, `structured_protocol_view`, `structured_pool_id`,
+`structured_generation_index`, `structured_assembly`,
+`structured_assembly_warning_count`, `secondary_reward_id`, and
+`secondary_quantity` are research/debug CSV fields.
+They are intentionally omitted from the public JSON export, whose format stays
+at version 1.
 
 ## Monopoly
 
@@ -60,3 +105,15 @@ Pages are anchored to the continuous run starting at page 1 (history always load
 - Arc timestamps use `unix_seconds = little_endian_u64(timestamp_raw) / 20000000 - 62135596800`.
 - Arc pulls are treated as 10-pull timestamp groups. Like Monopoly, every captured group is exported, including the oldest one even if the scan stopped mid-10-pull (its captured prefix is ordinal-stable).
 - Arc rows use the same `reward_type`, `reward_id`, `reward_name`, `reward_rank`, and `reward_key_hex` fields as Monopoly rows.
+
+## Mystery Box
+
+- Mystery Box requests use a 54-byte prefix.
+- Request constant: `2060` / `0x080c` at offset 26.
+- Request kind: `2110` / `0x083e` at offset 35.
+- Request cursor: offset 31, with a step of `2`; page is `cursor / 2`.
+- Responses contain an `FGashaponLotteryRecordData` structured block.
+- Each row contains the reward ID, exact quantity, a record flag, and a standard .NET timestamp.
+- Every row is one single pull regardless of its reward quantity.
+- A full response page contains 5 rows; the final page may contain 1–4 rows.
+- History is exported under `Gashapon_MysteryBox` without attempting to infer or split rotations.

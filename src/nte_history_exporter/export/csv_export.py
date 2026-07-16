@@ -27,11 +27,19 @@ FIELDNAMES = [
     "result_source_raw",
     "dice",
     "dice_raw_u32",
+    "decoder_mode",
+    "structured_protocol_view",
+    "structured_generation_index",
+    "structured_pool_id",
+    "structured_assembly",
+    "structured_assembly_warning_count",
     "reward_type",
     "reward_id",
     "reward_name",
     "reward_rank",
     "quantity",
+    "secondary_reward_id",
+    "secondary_quantity",
     "timestamp_decoded",
     "timestamp_raw_hex",
     "timestamp_ticks",
@@ -50,6 +58,7 @@ FIELDNAMES = [
     "record_len",
     "dice_offset_in_record",
     "record_hex",
+    "record_flag",
 ]
 
 

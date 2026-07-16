@@ -7,7 +7,12 @@ from typing import Any
 from nte_history_exporter.decoder.boundary import select_continuous_run_from_page_1
 from nte_history_exporter.decoder.arc import build_arc_rows_from_pairs, select_continuous_arc_run
 from nte_history_exporter.decoder.run import build_rows_from_pairs
+from nte_history_exporter.decoder.mystery_box import (
+    build_mystery_box_rows_from_pairs,
+    select_continuous_mystery_box_run,
+)
 from nte_history_exporter.decoder.user_uid import extract_user_uid_candidates
+from nte_history_exporter.decoder.server_region import extract_server_id
 from nte_history_exporter.live_capture.session import LiveHistorySession, UdpPacket
 
 
@@ -80,10 +85,15 @@ def find_udp_flow(flows: list[Any], preferred_index: int | None = None) -> tuple
 def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> dict[str, Any]:
     flows = read_flows(path)
     user_uid_candidates: Counter[str] = Counter()
+    server_id_candidates: Counter[str] = Counter()
     for flow in flows:
         for msg in flow.get(b"messages", []):
             user_uid_candidates.update(extract_user_uid_candidates(msg[1]))
+            server_id = extract_server_id(msg[1])
+            if server_id:
+                server_id_candidates.update([server_id])
     user_uid = user_uid_candidates.most_common(1)[0][0] if user_uid_candidates else None
+    server_id = server_id_candidates.most_common(1)[0][0] if server_id_candidates else None
 
     resolved_flow_index, flow = find_udp_flow(flows, flow_index)
     messages = flow[b"messages"]
@@ -101,12 +111,21 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
             packet = UdpPacket(ts, remote_ip, local_ip, remote_port, local_port, content)
         session.process_packet(packet)
 
-    pairs = [pair for pair in session.pairs if pair[7] != "arc_miracle_box"]
+    pairs = [
+        pair
+        for pair in session.pairs
+        if pair[7] not in {"arc_miracle_box", "mystery_box"}
+    ]
     arc_pairs = [pair for pair in session.pairs if pair[7] == "arc_miracle_box"]
+    mystery_box_pairs = [pair for pair in session.pairs if pair[7] == "mystery_box"]
     best_run, run_warnings = select_continuous_run_from_page_1(pairs)
     rows_out = build_rows_from_pairs(best_run)
     best_arc_run, arc_warnings = select_continuous_arc_run(arc_pairs)
     arc_rows = build_arc_rows_from_pairs(best_arc_run)
+    best_mystery_box_run, mystery_box_warnings = select_continuous_mystery_box_run(
+        mystery_box_pairs
+    )
+    mystery_box_rows = build_mystery_box_rows_from_pairs(best_mystery_box_run)
 
     return {
         "flow_index": resolved_flow_index,
@@ -118,5 +137,11 @@ def decode_mitmproxy_flows(path: str | Path, flow_index: int | None = None) -> d
         "best_arc_run": best_arc_run,
         "arc_rows": arc_rows,
         "arc_warnings": arc_warnings,
+        "mystery_box_pairs": mystery_box_pairs,
+        "best_mystery_box_run": best_mystery_box_run,
+        "mystery_box_rows": mystery_box_rows,
+        "mystery_box_warnings": mystery_box_warnings,
         "user_uid": session.user_uid or user_uid,
+        "server_id": session.server_id or server_id,
+        "capture_diagnostics": session.diagnostic_report(),
     }

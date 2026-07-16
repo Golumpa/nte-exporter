@@ -15,7 +15,7 @@ decoder-only offsets.
   "capture_source": "npcap",
   "exporter": {
     "name": "nte-history-exporter",
-    "version": "0.1.10"
+    "version": "0.2.0"
   },
   "banner": {
     "id": "Lottery_Permanent",
@@ -32,6 +32,8 @@ decoder-only offsets.
     "warnings": []
   },
   "user_uid": "optional-user-uid",
+  "server_id": "23003",
+  "account_region": "EU",
   "records": []
 }
 ```
@@ -45,6 +47,11 @@ Top-level fields:
 - `banner`: The history pool this file belongs to.
 - `scan`: Export counts and capture warnings.
 - `user_uid`: Optional game account UID, if known.
+- `server_id`: Optional numeric account-server ID, detected from the initial TCP
+  connection or selected by the user.
+- `account_region`: Region code mapped from a known production `server_id`.
+  Current values are `AS`, `NA_SA`, `EU`, and `SE`. It is omitted for an
+  unrecognized server ID rather than guessed.
 - `records`: Pull/reward records.
 
 ## Fields to identify pulls
@@ -71,6 +78,8 @@ Current stable pool IDs:
 - `Lottery_LimitedCharacter`: Limited Character Board. New limited character
   banners should still use this ID while they share the same history/pity pool.
 - `Arc_MiracleBox`: Arc Miracle Box.
+- `Gashapon_MysteryBox`: Mystery Box. Records are single pulls and history is
+  not split into event rotations by the exporter.
 
 Avoid using `banner.name`, `reward_name`, `reward_type` or `reward_rank` as primary IDs. They
 are useful display fields, but may change when mapping files are updated.
@@ -110,6 +119,9 @@ Arc source:
 nte|gashapon|pool_group_id|timestamp_raw|timestamp_group_ordinal
 ```
 
+Mystery Box uses the same Gashapon UID source. Reward quantity is preserved,
+but each record represents exactly one pull and has `result_type = single_pull`.
+
 ## Example records
 
 Monopoly:
@@ -143,6 +155,24 @@ Arc:
   "reward_name": "First Step to Success",
   "reward_rank": "B",
   "source_type": "miracle_box"
+}
+```
+
+Mystery Box:
+
+```json
+{
+  "uid": "2610c6e96afd64aa4a53fb9e8cebe031",
+  "pool_group_id": "Gashapon_MysteryBox",
+  "timestamp": "2026-07-08 19:09:33",
+  "timestamp_group_ordinal": 0,
+  "result_type": "single_pull",
+  "reward_type": "item",
+  "reward_id": "vehicle039",
+  "reward_name": "Draco",
+  "reward_rank": "S",
+  "quantity": 1,
+  "source_type": "mystery_box"
 }
 ```
 
