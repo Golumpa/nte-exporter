@@ -97,6 +97,59 @@ def is_dice_record(row: dict[str, Any]) -> bool:
         return False
 
 
+def reconcile_monopoly_page_split_timestamps(rows: list[dict[str, Any]]) -> None:
+    """Join timestamp fragments only when they form a page-split 10-pull.
+
+    Monopoly also supports singles, so equal display timestamps alone are not a
+    sufficient reason to join groups. A reconciliation is allowed only when
+    adjacent raw-timestamp groups cross a history-page boundary and contain ten
+    dice results in total. Ancillary rewards travel with their timestamp group
+    but do not count toward the ten pulls.
+    """
+    groups: list[list[dict[str, Any]]] = []
+    for row in rows:
+        raw = row.get("timestamp_raw_hex", "")
+        if groups and groups[-1][0].get("timestamp_raw_hex", "") == raw:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+
+    index = 0
+    while index < len(groups):
+        first = groups[index]
+        first_dice = sum(is_dice_record(row) for row in first)
+        if not 0 < first_dice < 10:
+            index += 1
+            continue
+
+        displayed = first[0].get("timestamp_decoded")
+        pages = {row.get("page") for row in first}
+        dice_count = first_dice
+        end = index + 1
+        while end < len(groups) and groups[end][0].get("timestamp_decoded") == displayed:
+            candidate = groups[end]
+            candidate_dice = sum(is_dice_record(row) for row in candidate)
+            if dice_count + candidate_dice > 10:
+                break
+            dice_count += candidate_dice
+            pages.update(row.get("page") for row in candidate)
+            end += 1
+            if dice_count == 10:
+                break
+
+        if dice_count == 10 and len(pages) > 1 and end > index + 1:
+            canonical = first[0].get("timestamp_raw_hex", "")
+            for group in groups[index:end]:
+                for row in group:
+                    original = row.get("timestamp_raw_hex", "")
+                    if original != canonical:
+                        row["timestamp_reconciled_from_raw_hex"] = original
+                        row["timestamp_raw_hex"] = canonical
+            index = end
+        else:
+            index += 1
+
+
 def annotate_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Assign timestamp-group ordinals and stable UIDs to every decoded row.
 
@@ -108,6 +161,8 @@ def annotate_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     if not rows:
         return rows
+
+    reconcile_monopoly_page_split_timestamps(rows)
 
     groups: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
