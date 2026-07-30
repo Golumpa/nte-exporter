@@ -266,6 +266,26 @@ def annotate_arc_groups(rows: list[dict[str, Any]]) -> None:
     # Pages are anchored at page 1, so ordinal 0 of every group is captured and
     # all UIDs are stable -- even a partially captured oldest 10-pull, whose
     # unseen rows can only append after the captured ones. All rows are exported.
+    # Arc transactions are always ten records. A transaction can cross response
+    # pages whose raw timestamps occasionally differ while displaying the same
+    # second. Re-key each consecutive batch to its first timestamp before UIDs
+    # are assigned, preserving prefix UIDs and preventing an ordinal restart.
+    run_start = 0
+    while run_start < len(rows):
+        displayed = rows[run_start].get("timestamp_decoded")
+        run_end = run_start + 1
+        while run_end < len(rows) and rows[run_end].get("timestamp_decoded") == displayed:
+            run_end += 1
+        for batch_start in range(run_start, run_end, 10):
+            batch = rows[batch_start : min(batch_start + 10, run_end)]
+            canonical = batch[0].get("timestamp_raw_hex", "")
+            for row in batch:
+                original = row.get("timestamp_raw_hex", "")
+                if original != canonical:
+                    row["timestamp_reconciled_from_raw_hex"] = original
+                    row["timestamp_raw_hex"] = canonical
+        run_start = run_end
+
     groups: dict[str, list[int]] = defaultdict(list)
     for index, row in enumerate(rows):
         groups[row["timestamp_raw_hex"]].append(index)

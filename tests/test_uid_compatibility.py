@@ -2,6 +2,27 @@ from tests.support import *  # noqa: F401,F403
 
 
 class UidCompatibilityTests(unittest.TestCase):
+    def test_monopoly_page_split_timestamp_variants_complete_ten_pull(self):
+        rows = [self._synthetic_row(1, "aa", "dice") for _ in range(5)]
+        rows += [self._synthetic_row(2, "bb", "dice") for _ in range(5)]
+        for row in rows:
+            row["timestamp_decoded"] = "2026-07-11 07:21:22"
+
+        annotated = annotate_groups(rows)
+
+        self.assertEqual([row["timestamp_group_ordinal"] for row in annotated], list(range(10)))
+        self.assertEqual({row["timestamp_raw_hex"] for row in annotated}, {"aa"})
+
+    def test_monopoly_singles_with_same_second_remain_separate(self):
+        rows = [self._synthetic_row(1, "aa", "dice"), self._synthetic_row(2, "bb", "dice")]
+        for row in rows:
+            row["timestamp_decoded"] = "2026-07-11 07:21:22"
+
+        annotated = annotate_groups(rows)
+
+        self.assertEqual([row["timestamp_group_ordinal"] for row in annotated], [0, 0])
+        self.assertEqual([row["timestamp_raw_hex"] for row in annotated], ["aa", "bb"])
+
     def test_uid_source_matches_committed_network_fixture(self):
         fixture = load_network_fixture()
         rows = annotate_groups(fixture_session().build_rows("permanent"))

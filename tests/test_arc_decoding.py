@@ -1,7 +1,24 @@
 from tests.support import *  # noqa: F401,F403
+from nte_history_exporter.decoder.arc import annotate_arc_groups
 
 
 class ArcDecodingTests(unittest.TestCase):
+    def test_page_split_timestamp_variants_form_one_ten_pull(self):
+        rows = [
+            {
+                "page": 1 if index < 5 else 2,
+                "timestamp_raw_hex": "aa" if index < 5 else "bb",
+                "timestamp_decoded": "2026-07-11 07:21:22",
+            }
+            for index in range(10)
+        ]
+
+        annotate_arc_groups(rows)
+
+        self.assertEqual([row["timestamp_group_ordinal"] for row in rows], list(range(10)))
+        self.assertEqual({row["timestamp_raw_hex"] for row in rows}, {"aa"})
+        self.assertEqual(rows[5]["timestamp_reconciled_from_raw_hex"], "bb")
+
     def test_arc_key_timestamp_and_uid_match_fixture(self):
         fixture = load_network_fixture()
         row = fixture_session().build_rows("arc_miracle_box")[0]
