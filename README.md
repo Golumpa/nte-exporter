@@ -110,6 +110,15 @@ Exports are not copied to the clipboard by default. Add `--copy-clipboard` to co
 
 If a page response is missed, the exporter reports the missing page number while capture is still running. Leave the exporter open, close and reopen that history board, then scroll down again. Scrolling backward within the existing view does not request the cached pages again. The replacement capture is accepted and the tool confirms when the gap has been recovered. If reopening the board still produces no page messages, return to the main menu and re-enter the game to start a fresh connection.
 
+### Achievement export
+
+Start the live exporter before launching the game. The completed achievement
+list is loaded during login, captured automatically, and written to
+`exports/Achievements_*.json` as an array of achievement IDs. Completed
+PlayStation trophy entries are retained even though they are not shown in the
+in-game achievement list. The console reports the visible and PlayStation
+counts as soon as the list has been decoded.
+
 #### Linux/macOS
 
 Downloaded executable, using `sudo` when your system requires elevated capture permission:
@@ -150,7 +159,7 @@ Decodes a `mitmproxy .flows` capture instead of listening live — used for rese
 
 | Flag      | Effect                                              |
 | --------- | --------------------------------------------------- |
-| `--live`  | Capture live UDP traffic instead of reading a file. |
+| `--live`  | Capture live traffic, including achievements loaded at login. |
 | `--debug` | Also write the research CSV and privacy-safe capture diagnostics. |
 | `--user-uid <uid>` | Override the auto-detected NTE user UID in the JSON export. |
 | `--copy-clipboard` | Copy a single live export JSON to clipboard after saving. |

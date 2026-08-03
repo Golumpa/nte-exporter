@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Decode NTE pull history from mitmproxy .flows captures or live capture."
     )
     parser.add_argument("capture_source", nargs="?", help="mitmproxy .flows file; omit when using --live")
-    parser.add_argument("--live", action="store_true", help="capture live UDP traffic instead of reading a .flows file")
+    parser.add_argument("--live", action="store_true", help="capture live game traffic instead of reading a .flows file")
     parser.add_argument("--flow-index", type=int, default=None)
     parser.add_argument("--interface-ip", default=None, help="local IPv4 address to bind for live capture")
     parser.add_argument(
