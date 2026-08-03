@@ -91,6 +91,10 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
     print("       last pull group can be confirmed as complete.")
     print("    5. You can open several boards in the same session.")
     print()
+    print(style("  Achievement export", BOLD))
+    print("    Start the exporter before launching the game. Achievements")
+    print("    loaded at login are captured automatically.")
+    print()
     print(style("  Waiting for history pages... press any key here when done.", BOLD, GREEN))
     print(rule())
 
@@ -98,6 +102,15 @@ def print_live_instructions(local_ip: str, backend: str = "windows_raw", detail:
 def print_page_captured(label: str, page: int | None, *, recaptured: bool = False) -> None:
     action = "recaptured" if recaptured else "page"
     print(style("  + ", GREEN, BOLD) + label + style(f"  {action} {page}", DIM))
+
+
+def print_achievements_captured(total: int, playstation: int) -> None:
+    visible = total - playstation
+    print(
+        style("  + ", GREEN, BOLD)
+        + "Achievements"
+        + style(f"  captured {visible} visible + {playstation} PlayStation", DIM)
+    )
 
 
 def print_missing_pages(label: str, pages: list[int]) -> None:

@@ -17,6 +17,7 @@ class ParsedIpPacket:
     dst_port: int
     payload: bytes
     protocol: str = "udp"
+    sequence_number: int = 0
 
 
 ParsedIpUdpPacket = ParsedIpPacket
@@ -69,12 +70,14 @@ def parse_ipv4_packet(data: bytes) -> ParsedIpPacket | None:
     if protocol == 6:
         if len(data) < ihl + 20:
             return None
-        src_port, dst_port = struct.unpack_from("!HH", data, ihl)
+        src_port, dst_port, sequence_number = struct.unpack_from("!HHI", data, ihl)
         tcp_header_len = (data[ihl + 12] >> 4) * 4
         if tcp_header_len < 20 or len(data) < ihl + tcp_header_len:
             return None
         payload = data[ihl + tcp_header_len :]
-        return ParsedIpPacket(src_ip, dst_ip, src_port, dst_port, payload, "tcp")
+        return ParsedIpPacket(
+            src_ip, dst_ip, src_port, dst_port, payload, "tcp", sequence_number
+        )
     return None
 
 

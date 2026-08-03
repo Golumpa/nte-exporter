@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nte_history_exporter import console
 from nte_history_exporter.constants import POOL_META
+from nte_history_exporter.decoder.achievement import extract_achievement_ids, reassemble_tcp_segments
 from nte_history_exporter.decoder.boundary import annotate_groups, select_continuous_run_from_page_1
 from nte_history_exporter.export.csv_export import write_csv
 from nte_history_exporter.export.json_export import build_export_json
@@ -79,6 +80,8 @@ def run_live_capture(
         console.print_capture_fallback(capture.fallback_reason)
     reported_missing_pages: dict[str, tuple[int, ...]] = {}
     active_gap_notices: set[str] = set()
+    tcp_segments: dict[tuple[str, int, str, int], list[tuple[int, bytes]]] = {}
+    achievement_ids: list[str] = []
 
     try:
         with StopKeyMonitor() as stop_key:
@@ -87,6 +90,28 @@ def run_live_capture(
                     break
                 if packet is None:
                     continue
+                if (
+                    not achievement_ids
+                    and packet.protocol == "tcp"
+                    and packet.payload
+                    and packet.dst_ip == local_ip
+                ):
+                    flow = (packet.src_ip, packet.src_port, packet.dst_ip, packet.dst_port)
+                    tcp_segments.setdefault(flow, []).append(
+                        (packet.sequence_number, packet.payload)
+                    )
+                    if not achievement_ids:
+                        achievement_ids = extract_achievement_ids(
+                            reassemble_tcp_segments(tcp_segments[flow])
+                        )
+                        if achievement_ids:
+                            console.print_achievements_captured(
+                                len(achievement_ids),
+                                sum(
+                                    value.lower().startswith("playstation_")
+                                    for value in achievement_ids
+                                ),
+                            )
                 pair_count_before = len(session.pairs)
                 matched = session.process_packet(
                     UdpPacket(
@@ -137,6 +162,13 @@ def run_live_capture(
         )
 
     exports = []
+    achievement_path = None
+    if achievement_ids:
+        achievement_path = _achievement_path()
+        achievement_path.write_text(
+            json.dumps(achievement_ids, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        console.print_note(f"Achievement list written: {achievement_path}")
     diagnostics_path = None
     if write_debug_csv:
         diagnostics_path = new_diagnostics_path()
@@ -183,13 +215,20 @@ def run_live_capture(
 
     console.print_results_header()
     if not exports:
-        console.print_problem("No history pages were captured.")
+        if achievement_path is not None:
+            console.print_note("No pull-history pages were captured.")
+        else:
+            console.print_problem("No history pages were captured.")
         console.print_note("Make sure the capture backend is running, then reopen the")
         console.print_note("history screen and scroll from page 1. If no page messages")
         console.print_note("appear, return to the main menu and re-enter the game.")
         if diagnostics_path is not None:
             console.print_note(f"Diagnostics written: {diagnostics_path}")
-        return {"exports": [], "diagnostics_path": diagnostics_path}
+        return {
+            "exports": [],
+            "diagnostics_path": diagnostics_path,
+            "achievement_path": achievement_path,
+        }
 
     for item in exports:
         scan = item["export"]["scan"]
@@ -218,7 +257,23 @@ def run_live_capture(
     elif copy_clipboard and len(exports) > 1:
         console.print_note("Multiple banners captured; clipboard copy skipped so one export")
         console.print_note("does not overwrite another.")
-    return {"exports": exports, "diagnostics_path": diagnostics_path}
+    return {
+        "exports": exports,
+        "diagnostics_path": diagnostics_path,
+        "achievement_path": achievement_path,
+    }
+
+
+def _achievement_path() -> Path:
+    export_dir = Path("exports")
+    export_dir.mkdir(parents=True, exist_ok=True)
+    base = export_dir / f"Achievements_{datetime.now():%Y%m%d_%H%M%S}"
+    path = base.with_suffix(".json")
+    counter = 2
+    while path.exists():
+        path = export_dir / f"{base.name}_{counter}.json"
+        counter += 1
+    return path
 
 
 def export_paths(kind: str, user_uid: str | None = None) -> tuple[Path, Path]:
