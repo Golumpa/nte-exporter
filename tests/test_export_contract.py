@@ -8,7 +8,7 @@ from nte_history_exporter.live_capture.runner import _achievement_path
 
 class ExportContractTests(unittest.TestCase):
     def test_public_version_references_match(self):
-        self.assertEqual(__version__, "0.3.0")
+        self.assertEqual(__version__, "0.3.2")
         self.assertEqual(EXPORTER_VERSION, __version__)
 
     def test_sanitized_export_omits_raw_packet_fields(self):
