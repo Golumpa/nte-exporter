@@ -9,6 +9,7 @@ from nte_history_exporter.constants import (
     HISTORY_REQUEST_BANNER,
     HISTORY_REQUEST_LENGTH,
     HISTORY_PAGE_CURSOR_MULTIPLIER,
+    LEADIN_MAGICS,
     LIMITED_CHARACTER_SELECTOR,
     MARKERS,
     PERMANENT_SELECTOR,
@@ -23,7 +24,7 @@ from nte_history_exporter.decoder.structured_protocol import (
 
 REWARD_ID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
 WARP_PIECE_CHASE_PATTERN = bytes.fromhex(
-    "c4b0ccc00000000000040000003c00000010a58d957dd1a58dad95d17dc1c400"
+    "c1c4b0ccc00000000000040000003c00000010a58d957dd1a58dad95d17dc1c400"
 )
 
 
@@ -146,14 +147,51 @@ def _page_first_prefixed_dice_raw(chunk_without_marker: bytes) -> int | None:
     return None
 
 
+def _leadin_dice_raw(chunk_without_marker: bytes) -> int | None:
+    """Read the dice field from a lead-in-prefixed record.
+
+    Non-first records in a history page begin with a fixed lead-in magic, and
+    the dice field (raw value = dice * 4) is the u32 immediately after it.
+    """
+    for magic in LEADIN_MAGICS:
+        if chunk_without_marker.startswith(magic):
+            offset = len(magic)
+            if offset + 4 <= len(chunk_without_marker):
+                value = struct.unpack_from("<I", chunk_without_marker, offset)[0]
+                if value in VALID_DICE_FIELDS:
+                    return value
+            return None
+    return None
+
+
 def extract_dice(chunk_without_marker: bytes) -> tuple[int | None, int | None, int | None]:
     prefixed_dice_raw = _page_first_prefixed_dice_raw(chunk_without_marker)
     if prefixed_dice_raw is not None:
         return (0 if prefixed_dice_raw == 0 else prefixed_dice_raw // 4), prefixed_dice_raw, 9
 
-    for off in range(0, min(16, max(0, len(chunk_without_marker) - 3))):
+    leadin_dice_raw = _leadin_dice_raw(chunk_without_marker)
+    if leadin_dice_raw is not None:
+        offset = next(len(m) for m in LEADIN_MAGICS if chunk_without_marker.startswith(m))
+        return (0 if leadin_dice_raw == 0 else leadin_dice_raw // 4), leadin_dice_raw, offset
+
+    if not chunk_without_marker:
+        return None, None, None
+
+    first_byte = chunk_without_marker[0]
+    offset_map = {0x40: 20, 0x38: 18, 0x91: 18, 0x30: 16, 0x48: 22}
+    dice_offset = offset_map.get(first_byte)
+    if dice_offset is not None:
+        check_offsets = (0, dice_offset, 5, 10, 9)
+        zero_offsets = (5, 9, 10, dice_offset)
+    else:
+        check_offsets = (0, 5, 10, 9)
+        zero_offsets = (5, 9, 10)
+
+    for off in check_offsets:
+        if off + 4 > len(chunk_without_marker):
+            continue
         val = struct.unpack_from("<I", chunk_without_marker, off)[0]
-        if val in VALID_DICE_FIELDS:
+        if val in VALID_DICE_FIELDS and (val != 0 or off in zero_offsets):
             return (0 if val == 0 else val // 4), val, off
     return None, None, None
 
@@ -166,7 +204,10 @@ def classify_result_type(
 ) -> tuple[str, int | None]:
     if dice is None or dice_offset is None:
         return "unknown", None
-    if reward_id.casefold() == "dice_ticket_01" and WARP_PIECE_CHASE_PATTERN in chunk_without_marker:
+    if reward_id.casefold() == "dice_ticket_01" and (
+        chunk_without_marker.startswith(WARP_PIECE_CHASE_PATTERN[5:])
+        or chunk_without_marker.startswith(WARP_PIECE_CHASE_PATTERN)
+    ):
         return "chase_reward", -4
     if dice == 0:
         return "points_gift", 0
