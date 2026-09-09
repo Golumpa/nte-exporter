@@ -9,6 +9,7 @@ from nte_history_exporter.constants import (
     HISTORY_REQUEST_BANNER,
     HISTORY_REQUEST_LENGTH,
     HISTORY_PAGE_CURSOR_MULTIPLIER,
+    LEADIN_MAGICS,
     LIMITED_CHARACTER_SELECTOR,
     MARKERS,
     PERMANENT_SELECTOR,
@@ -146,10 +147,32 @@ def _page_first_prefixed_dice_raw(chunk_without_marker: bytes) -> int | None:
     return None
 
 
+def _leadin_dice_raw(chunk_without_marker: bytes) -> int | None:
+    """Read the dice field from a lead-in-prefixed record.
+
+    Non-first records in a history page begin with a fixed lead-in magic, and
+    the dice field (raw value = dice * 4) is the u32 immediately after it.
+    """
+    for magic in LEADIN_MAGICS:
+        if chunk_without_marker.startswith(magic):
+            offset = len(magic)
+            if offset + 4 <= len(chunk_without_marker):
+                value = struct.unpack_from("<I", chunk_without_marker, offset)[0]
+                if value in VALID_DICE_FIELDS:
+                    return value
+            return None
+    return None
+
+
 def extract_dice(chunk_without_marker: bytes) -> tuple[int | None, int | None, int | None]:
     prefixed_dice_raw = _page_first_prefixed_dice_raw(chunk_without_marker)
     if prefixed_dice_raw is not None:
         return (0 if prefixed_dice_raw == 0 else prefixed_dice_raw // 4), prefixed_dice_raw, 9
+
+    leadin_dice_raw = _leadin_dice_raw(chunk_without_marker)
+    if leadin_dice_raw is not None:
+        offset = next(len(m) for m in LEADIN_MAGICS if chunk_without_marker.startswith(m))
+        return (0 if leadin_dice_raw == 0 else leadin_dice_raw // 4), leadin_dice_raw, offset
 
     if not chunk_without_marker:
         return None, None, None
